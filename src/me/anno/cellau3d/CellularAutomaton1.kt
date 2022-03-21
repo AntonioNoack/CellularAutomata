@@ -17,21 +17,17 @@ import me.anno.maths.Maths.ceilDiv
 import me.anno.maths.Maths.max
 import me.anno.maths.Maths.mixARGB2
 import me.anno.mesh.Shapes
-import me.anno.mesh.vox.meshing.BlockBuffer
-import me.anno.mesh.vox.meshing.BlockSide
-import me.anno.mesh.vox.meshing.VoxelMeshBuildInfo
 import me.anno.mesh.vox.model.VoxelModel
+import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.b
 import me.anno.utils.Color.g
 import me.anno.utils.Color.r
 import me.anno.utils.hpc.ProcessingGroup
-import me.anno.utils.structures.arrays.ExpandingFloatArray
 import me.anno.utils.structures.lists.PairArrayList
 import org.apache.logging.log4j.LogManager
 import java.util.*
 import kotlin.math.ceil
 import kotlin.math.log2
-import kotlin.math.min
 
 /**
  * simulates a cellular automaton;
@@ -139,6 +135,7 @@ class CellularAutomaton1 : MeshSpawner() {
     fun makeCubic() {
         sizeY = sizeX
         sizeZ = sizeX
+        PropertyInspector.invalidateUI()
     }
 
     @DebugAction
@@ -173,7 +170,7 @@ class CellularAutomaton1 : MeshSpawner() {
     var isAlive = false
 
     @DebugProperty
-    var updateRate = 0.5f
+    var updatePeriod = 0.5f
 
     @DebugProperty
     @NotSerializedProperty
@@ -235,7 +232,7 @@ class CellularAutomaton1 : MeshSpawner() {
             init1()
         }
         accumulatedTime += Engine.deltaTime
-        if (isAlive && accumulatedTime > updateRate && !isComputing) {
+        if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             if (asyncCompute) {
                 pool += {
@@ -259,8 +256,8 @@ class CellularAutomaton1 : MeshSpawner() {
 
     private fun step(g0: Grid, g1: Grid) {
         val t0 = System.nanoTime()
-        if (updateRate.isFinite()) {
-            accumulatedTime = Maths.clamp(accumulatedTime - updateRate, -updateRate, updateRate)
+        if (updatePeriod.isFinite()) {
+            accumulatedTime = Maths.clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
         }
         val src = if (g0 == lastSrc) g1 else g0
         val dst = if (src === g0) g1 else g0
@@ -384,7 +381,7 @@ class CellularAutomaton1 : MeshSpawner() {
         clone.births = births
         clone.states = states
         clone.neighborHood = neighborHood
-        clone.updateRate = updateRate
+        clone.updatePeriod = updatePeriod
         clone.gridType = gridType
         clone.computeMode = computeMode
     }

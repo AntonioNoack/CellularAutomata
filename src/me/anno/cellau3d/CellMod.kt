@@ -1,9 +1,23 @@
 package me.anno.cellau3d
 
+import me.anno.config.DefaultConfig
+import me.anno.config.DefaultConfig.style
+import me.anno.ecs.Entity
+import me.anno.ecs.components.mesh.Material
+import me.anno.ecs.prefab.Prefab
+import me.anno.ecs.prefab.PrefabInspector
+import me.anno.ecs.prefab.change.Path
+import me.anno.engine.ECSRegistry
 import me.anno.engine.RemsEngine
+import me.anno.engine.ui.EditorState
+import me.anno.engine.ui.render.PlayMode
+import me.anno.engine.ui.render.SceneView
 import me.anno.extensions.ExtensionLoader
 import me.anno.extensions.mods.Mod
 import me.anno.io.ISaveable.Companion.registerCustomClass
+import me.anno.ui.custom.CustomList
+import me.anno.ui.debug.TestStudio.Companion.testUI
+import me.anno.ui.editor.PropertyInspector
 
 class CellMod : Mod() {
 
@@ -14,11 +28,47 @@ class CellMod : Mod() {
     }
 
     companion object {
+
         @JvmStatic
         fun main(args: Array<String>) {
             ExtensionLoader.loadMainInfo()
+            // runEngine() // alternative
+            runDemo() // show case
+        }
+
+        private fun runDemo() {
+            registerCustomClass(Material())
+            testUI {
+                DefaultConfig["debug.ui.showFPS"] = false
+                ECSRegistry.init()
+                val prefab = Prefab("Entity")
+                val pi = prefab.add(Path.ROOT_PATH, 'c', "CellularAutomaton2")
+                prefab.set(pi, "sizeX", 100)
+                prefab.set(pi, "sizeY", 100)
+                prefab.set(pi, "sizeZ", 100)
+                prefab.set(pi, "births", "1")
+                prefab.set(pi, "survives", "")
+                prefab.set(pi, "states", 5)
+                prefab.set(pi, "neighborHood", NeighborHood.VON_NEUMANN)
+                prefab.set(pi, "updatePeriod", 0.1f)
+                val world = prefab.getSampleInstance() as Entity
+                val component = world.components.first()
+                EditorState.world = world
+                EditorState.select(component, component)
+                val list = CustomList(false, style)
+                val view = SceneView(EditorState, PlayMode.EDITING, style)
+                val properties = PropertyInspector({ EditorState.selection }, style)
+                PrefabInspector.currentInspector = PrefabInspector(prefab)
+                list.add(view.setWeight(2f))
+                list.add(properties.setWeight(1f))
+                list
+            }
+        }
+
+        private fun runEngine() {
             RemsEngine().run()
         }
+
     }
 
 }

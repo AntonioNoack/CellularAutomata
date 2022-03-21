@@ -20,6 +20,7 @@ import me.anno.gpu.texture.Texture3D
 import me.anno.io.serialization.NotSerializedProperty
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
+import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
 import me.anno.utils.structures.lists.PairArrayList
 import org.apache.logging.log4j.LogManager
@@ -49,14 +50,14 @@ class CellularAutomaton2 : ProceduralMesh() {
     }
 
     @Type("Color3")
-    var color0 = 0xff0000.toVecRGB()
+    var color0 = 0x1d73d3.toVecRGB()
         set(value) {
             field.set(value)
             setColors()
         }
 
     @Type("Color3")
-    var color1 = 0xf0ff00.toVecRGB()
+    var color1 = 0xffffff.toVecRGB()
         set(value) {
             field.set(value)
             setColors()
@@ -160,11 +161,13 @@ class CellularAutomaton2 : ProceduralMesh() {
         accumulatedTime = 0f
     }
 
+    // todo makeCubic: set CSet
     @DebugAction
     fun makeCubic() {
         sizeY = sizeX
         sizeZ = sizeX
         invalidateMesh()
+        PropertyInspector.invalidateUI()
     }
 
     @DebugAction
@@ -199,7 +202,7 @@ class CellularAutomaton2 : ProceduralMesh() {
     var isAlive = false
 
     @DebugProperty
-    var updateRate = 0.5f
+    var updatePeriod = 0.5f
 
     @DebugProperty
     @NotSerializedProperty
@@ -249,7 +252,7 @@ class CellularAutomaton2 : ProceduralMesh() {
 
     @DebugAction
     fun step() {
-        updateRate = Float.POSITIVE_INFINITY
+        updatePeriod = Float.POSITIVE_INFINITY
         if (!isComputing) {
             val g0 = g0 ?: return
             val g1 = g1 ?: return
@@ -272,7 +275,7 @@ class CellularAutomaton2 : ProceduralMesh() {
             init1()
         }
         accumulatedTime += Engine.deltaTime
-        if (isAlive && accumulatedTime > updateRate && !isComputing) {
+        if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             if (asyncCompute) {
                 pool += {
@@ -289,8 +292,8 @@ class CellularAutomaton2 : ProceduralMesh() {
 
     private fun step(g0: Grid, g1: Grid) {
         val t0 = System.nanoTime()
-        if (updateRate.isFinite()) {
-            accumulatedTime = clamp(accumulatedTime - updateRate, -updateRate, updateRate)
+        if (updatePeriod.isFinite()) {
+            accumulatedTime = clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
         }
         val src = if (g0 == lastSrc) g1 else g0
         val dst = if (src === g0) g1 else g0
@@ -380,7 +383,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         clone.births = births
         clone.states = states
         clone.neighborHood = neighborHood
-        clone.updateRate = updateRate
+        clone.updatePeriod = updatePeriod
         clone.gridType = gridType
         clone.computeMode = computeMode
     }
