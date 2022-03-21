@@ -11,12 +11,9 @@ import me.anno.ecs.annotations.*
 import me.anno.ecs.components.mesh.Material
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
-import me.anno.ecs.components.mesh.TypeValue
 import me.anno.ecs.components.shaders.Texture3DBTMaterial
 import me.anno.ecs.prefab.PrefabSaveable
 import me.anno.gpu.GFX
-import me.anno.gpu.framebuffer.TargetType
-import me.anno.gpu.shader.GLSLType
 import me.anno.gpu.texture.GPUFiltering
 import me.anno.gpu.texture.Texture2D
 import me.anno.gpu.texture.Texture3D
@@ -42,15 +39,13 @@ class CellularAutomaton2 : ProceduralMesh() {
 
     private val texture = Texture3D("cells", 1, 1, 1)
     private val material = Material.create()
-    private val stdShader = Texture3DBTMaterial()
+    private val shader = Texture3DBTMaterial()
 
     init {
-        material.shaderOverrides["cells"] = TypeValue(GLSLType.S3D, texture)
-        material.shader = stdShader
+        material.shader = shader
         mesh2.materialInst = material
-        mesh2.inverseOutline = true
+        mesh2.inverseOutline = true // for correct outlines, since we render on the back faces
         texture.filtering = GPUFiltering.TRULY_NEAREST
-        GFX.addGPUTask(1) { texture.create(TargetType.UByteTarget1, null) }
     }
 
     @Type("Color3")
@@ -338,8 +333,8 @@ class CellularAutomaton2 : ProceduralMesh() {
             texture.d = sizeZ
         }
         texture.createMonochrome(data)
-        stdShader.blocks = texture
-        stdShader.size.set(sizeX, sizeY, sizeZ)
+        shader.blocks = texture
+        shader.size.set(sizeX, sizeY, sizeZ)
         setColors()
         Texture2D.bufferPool.returnBuffer(data)
     }
@@ -348,8 +343,8 @@ class CellularAutomaton2 : ProceduralMesh() {
         val c0 = color0
         val c1 = color1
         val div = max(1, states - 2)
-        stdShader.color0.set(c0).lerp(c1, 1f + 1f / div)
-        stdShader.color1.set(c0).lerp(c1, 1f - 255f / div)
+        shader.color0.set(c0).lerp(c1, 1f + 1f / div)
+        shader.color1.set(c0).lerp(c1, 1f - 255f / div)
     }
 
     override fun generateMesh() {
