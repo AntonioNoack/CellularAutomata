@@ -19,6 +19,12 @@ I was inspired to experiment with cellular automata by [Tantan](https://www.yout
 This is a mod for Rem's Engine, so first build the engine. Then you can build this project, e.g. with Intellij Idea.
 There are no dependencies besides my engine.
 
+Then, to create a cellular automate:
+- run CellMod.main()
+- create a new project in Rem's Engine
+- add an entity to "Globally Shared" (using right click)
+- add a Cellular Automation 2 component to that entity (using right click)
+- enjoy 😁
 
 ## Simulation
 
