@@ -1,0 +1,4 @@
+uuid: me.anno.cellau3d
+name: Cellular Automata 3D
+author: Antonio Noack
+main-class: me.anno.cellau3d.CellMod
