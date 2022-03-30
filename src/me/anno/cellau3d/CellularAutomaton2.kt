@@ -350,9 +350,9 @@ class CellularAutomaton2 : ProceduralMesh() {
         shader.color1.set(c0).lerp(c1, 1f - 255f / div)
     }
 
-    override fun generateMesh() {
+    override fun generateMesh(mesh: Mesh) {
         val base = Shapes.flatCube.back
-        val positions = mesh2.positions ?: base.positions!!
+        val positions = mesh.positions ?: base.positions!!
         val sx = max(sizeX.toFloat() / 2f, 0.5f)
         val sy = max(sizeY.toFloat() / 2f, 0.5f)
         val sz = max(sizeZ.toFloat() / 2f, 0.5f)
@@ -363,8 +363,8 @@ class CellularAutomaton2 : ProceduralMesh() {
             positions[i + 1] = sign(positions[i + 1]) * sy
             positions[i + 2] = sign(positions[i + 2]) * sz
         }
-        mesh2.positions = positions
-        mesh2.invalidateGeometry()
+        mesh.positions = positions
+        mesh.invalidateGeometry()
     }
 
     override fun clone(): CellularAutomaton2 {

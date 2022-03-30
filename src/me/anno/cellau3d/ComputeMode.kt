@@ -45,7 +45,7 @@ enum class ComputeMode(val id: Int) {
             // iterate over src and apply the rules
             val neighborHood = rules.neighborHood
             val healthy = rules.states - 1
-            pool.process2d(0, 0, src.sy, src.sz, 64) { y0, z0, y1, z1 ->
+            pool.processBalanced2d(0, 0, src.sy, src.sz, 16, 1) { y0, z0, y1, z1 ->
                 for (z in z0 until z1) {
                     for (y in y0 until y1) {
                         for (x in 0 until src.sx) {
