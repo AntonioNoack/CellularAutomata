@@ -6,7 +6,7 @@ class Rules(var survival: Int, var birth: Int, var states: Int, var neighborHood
         return (survival and (1 shl neighbors)) != 0
     }
 
-    fun spawns(neighbors: Int): Boolean {
+    fun births(neighbors: Int): Boolean {
         return (birth and (1 shl neighbors)) != 0
     }
 

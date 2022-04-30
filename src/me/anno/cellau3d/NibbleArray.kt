@@ -4,7 +4,7 @@ import me.anno.maths.Maths.ceilDiv
 
 class NibbleArray(
     private val bitsPerInstance: Int,
-    val length: Int
+    private val length: Int
 ) {
 
     init {
@@ -15,13 +15,13 @@ class NibbleArray(
         data.fill(0L)
     }
 
-    val instancesPerLong = 64 / bitsPerInstance
-    val longLength = ceilDiv(length, instancesPerLong)
+    private val instancesPerLong = 64 / bitsPerInstance
+    private val longLength = ceilDiv(length, instancesPerLong)
     val data = LongArray(longLength)
-    val instanceMask = (1L shl bitsPerInstance) - 1
+    private val instanceMask = (1L shl bitsPerInstance) - 1
 
     operator fun get(index: Int): Int {
-        if(index < 0 || index >= length) throw IndexOutOfBoundsException("Index $index is out of bounds (0 until $length)!")
+        if (index < 0 || index >= length) throw IndexOutOfBoundsException("Index $index is out of bounds (0 until $length)!")
         val arrayIndex = index / instancesPerLong
         val localIndex = index % instancesPerLong
         val shift = localIndex * bitsPerInstance
@@ -29,7 +29,7 @@ class NibbleArray(
     }
 
     operator fun set(index: Int, value: Int) {
-        if(index < 0 || index >= length) throw IndexOutOfBoundsException("Index $index is out of bounds (0 until $length)!")
+        if (index < 0 || index >= length) throw IndexOutOfBoundsException("Index $index is out of bounds (0 until $length)!")
         val arrayIndex = index / instancesPerLong
         val localIndex = index % instancesPerLong
         val shift = localIndex * bitsPerInstance

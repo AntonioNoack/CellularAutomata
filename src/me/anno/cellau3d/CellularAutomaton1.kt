@@ -157,7 +157,7 @@ class CellularAutomaton1 : MeshSpawner() {
         clearGrid()
         val src = if (g0 == lastSrc) g1 else g0
         if (src != null) {
-            src.spawnNoise(4, 0.5f, states - 1, Random())
+            src.createNoise(4, 0.5f, states - 1, Random())
             isAlive = !src.isEmpty()
         }
     }

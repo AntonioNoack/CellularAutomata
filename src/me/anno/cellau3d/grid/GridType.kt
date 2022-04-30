@@ -3,6 +3,7 @@ package me.anno.cellau3d.grid
 import me.anno.cellau3d.CellularAutomaton1
 import me.anno.cellau3d.CellularAutomaton2
 
+@Suppress("unused")
 enum class GridType(val id: Int) {
     BYTE_ARRAY(0) {
         override fun create(ca: CellularAutomaton1): Grid {

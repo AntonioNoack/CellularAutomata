@@ -54,7 +54,7 @@ abstract class Grid(val sx: Int, val sy: Int, val sz: Int, val stateBits: Int) {
     }
 
     // from https://github.com/TanTanDev/3d_celluar_automata/blob/main/src/utils.rs
-    fun spawnNoise(radius: Int, density: Float, state: Int, random: Random = Random(1234L)) {
+    fun createNoise(radius: Int, density: Float, state: Int, random: Random = Random(1234L)) {
 
         // 1728 :3
         val x0 = sx / 2 - radius

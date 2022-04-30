@@ -28,7 +28,7 @@ enum class ComputeMode(val id: Int) {
                                 }
                             }
                             // check if neighbor count keeps us alive
-                            rules.spawns(neighborHood.count(src, x, y, z)) -> {
+                            rules.births(neighborHood.count(src, x, y, z)) -> {
                                 dst.set(x, y, z, 1)
                                 dst.setState(x, y, z, healthy)
                             }
@@ -66,7 +66,7 @@ enum class ComputeMode(val id: Int) {
                                     }
                                 }
                                 // check if neighbor count keeps us alive
-                                rules.spawns(neighborHood.count(src, x, y, z)) -> {
+                                rules.births(neighborHood.count(src, x, y, z)) -> {
                                     dst.set(x, y, z, 1)
                                     dst.setState(x, y, z, healthy)
                                 }
@@ -106,7 +106,7 @@ enum class ComputeMode(val id: Int) {
                     val xi = x + di.x
                     val yi = y + di.y
                     val zi = z + di.z
-                    if (src.get(xi, yi, zi, 1) == 0 && rules.spawns(neighborHood.count(src, xi, yi, zi))) {
+                    if (src.get(xi, yi, zi, 1) == 0 && rules.births(neighborHood.count(src, xi, yi, zi))) {
                         dst.set(xi, yi, zi, 1)
                         dst.setState(xi, yi, zi, healthy)
                     }
@@ -144,7 +144,7 @@ enum class ComputeMode(val id: Int) {
                     val xi = x + di.x
                     val yi = y + di.y
                     val zi = z + di.z
-                    if (src.get(xi, yi, zi, 1) == 0 && rules.spawns(neighborHood.count(src, xi, yi, zi))) {
+                    if (src.get(xi, yi, zi, 1) == 0 && rules.births(neighborHood.count(src, xi, yi, zi))) {
                         dst.set(xi, yi, zi, 1)
                         dst.setState(xi, yi, zi, healthy)
                     }

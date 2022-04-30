@@ -15,10 +15,12 @@ import me.anno.engine.ui.render.SceneView
 import me.anno.extensions.ExtensionLoader
 import me.anno.extensions.mods.Mod
 import me.anno.io.ISaveable.Companion.registerCustomClass
+import me.anno.io.zip.InnerTmpFile
 import me.anno.ui.custom.CustomList
 import me.anno.ui.debug.TestStudio.Companion.testUI
 import me.anno.ui.editor.PropertyInspector
 
+@Suppress("unused")
 class CellMod : Mod() {
 
     override fun onInit() {
@@ -42,23 +44,24 @@ class CellMod : Mod() {
                 DefaultConfig["debug.ui.showFPS"] = false
                 ECSRegistry.init()
                 val prefab = Prefab("Entity")
+                val prefabSource = InnerTmpFile.InnerTmpPrefabFile(prefab)
                 val pi = prefab.add(Path.ROOT_PATH, 'c', "CellularAutomaton2")
-                prefab.set(pi, "sizeX", 100)
-                prefab.set(pi, "sizeY", 100)
-                prefab.set(pi, "sizeZ", 100)
-                prefab.set(pi, "births", "1")
-                prefab.set(pi, "survives", "")
-                prefab.set(pi, "states", 5)
-                prefab.set(pi, "neighborHood", NeighborHood.VON_NEUMANN)
-                prefab.set(pi, "updatePeriod", 0.1f)
+                prefab[pi, "sizeX"] = 100
+                prefab[pi, "sizeY"] = 100
+                prefab[pi, "sizeZ"] = 100
+                prefab[pi, "births"] = "1"
+                prefab[pi, "survives"] = ""
+                prefab[pi, "states"] = 5
+                prefab[pi, "neighborHood"] = NeighborHood.VON_NEUMANN
+                prefab[pi, "updatePeriod"] = 0.1f
                 val world = prefab.getSampleInstance() as Entity
                 val component = world.components.first()
-                EditorState.world = world
+                EditorState.prefabSource = prefabSource
                 EditorState.select(component, component)
                 val list = CustomList(false, style)
                 val view = SceneView(EditorState, PlayMode.EDITING, style)
                 val properties = PropertyInspector({ EditorState.selection }, style)
-                PrefabInspector.currentInspector = PrefabInspector(prefab)
+                PrefabInspector.currentInspector = PrefabInspector(prefabSource)
                 list.add(view.setWeight(2f))
                 list.add(properties.setWeight(1f))
                 list

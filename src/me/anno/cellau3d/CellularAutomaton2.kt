@@ -38,7 +38,12 @@ import kotlin.math.sign
 @Suppress("unused")
 class CellularAutomaton2 : ProceduralMesh() {
 
-    private val texture = Texture3D("cells", 1, 1, 1)
+    @NotSerializedProperty
+    var texture0 = Texture3D("cells", 1, 1, 1)
+
+    @NotSerializedProperty
+    var texture1 = Texture3D("cells", 1, 1, 1)
+
     private val material = Material.create()
     private val shader = Texture3DBTMaterial()
 
@@ -46,7 +51,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         material.shader = shader
         mesh2.materialInst = material
         mesh2.inverseOutline = true // for correct outlines, since we render on the back faces
-        texture.filtering = GPUFiltering.TRULY_NEAREST
+        texture0.filtering = GPUFiltering.TRULY_NEAREST
     }
 
     @Type("Color3")
@@ -153,19 +158,30 @@ class CellularAutomaton2 : ProceduralMesh() {
 
     var computeMode = ComputeMode.SIMPLE_SERIAL
 
+    fun swapTextures() {
+        val tmp = texture0
+        texture0 = texture1
+        texture1 = tmp
+    }
+
     @DebugAction
     fun reset() {
         g0 = null
         g1 = null
         isComputing = false
         accumulatedTime = 0f
+        invalidateAABB()
     }
 
-    // todo makeCubic: set CSet
     @DebugAction
     fun makeCubic() {
         sizeY = sizeX
         sizeZ = sizeX
+        val prefabPath = prefabPath
+        if (prefabPath != null) {
+            root.prefab?.set(prefabPath, "sizeY", sizeY)
+            root.prefab?.set(prefabPath, "sizeZ", sizeZ)
+        }
         invalidateMesh()
         PropertyInspector.invalidateUI()
     }
@@ -189,7 +205,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         clearGrid()
         val src = if (g0 == lastSrc) g1 else g0
         if (src != null) {
-            src.spawnNoise(4, 0.5f, states - 1, Random())
+            src.createNoise(4, 0.5f, states - 1, Random())
             isAlive = !src.isEmpty()
         }
     }
@@ -238,6 +254,8 @@ class CellularAutomaton2 : ProceduralMesh() {
             g0?.clear()
             g1?.clear()
         }
+        // fake missing creation
+        texture1.isCreated = false
     }
 
     @DebugProperty
@@ -249,6 +267,14 @@ class CellularAutomaton2 : ProceduralMesh() {
     var ticksPerSecond = 0f
 
     var asyncCompute = true
+    var gpuCompute = false
+        set(value) {
+            if (field != value) {
+                field = value
+                // as a kind of reset
+                texture1.isCreated = false
+            }
+        }
 
     @DebugAction
     fun step() {
@@ -256,7 +282,12 @@ class CellularAutomaton2 : ProceduralMesh() {
         if (!isComputing) {
             val g0 = g0 ?: return
             val g1 = g1 ?: return
-            step(g0, g1)
+            if (gpuCompute && texture0.isCreated && texture1.isCreated) {
+                gpuStep(this)
+                updateTexture(sizeX, sizeY, sizeZ)
+            } else {
+                step(g0, g1)
+            }
         }
     }
 
@@ -277,12 +308,18 @@ class CellularAutomaton2 : ProceduralMesh() {
         accumulatedTime += Engine.deltaTime
         if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
-            if (asyncCompute) {
-                pool += {
-                    step(g0, g1)
+            when {
+                gpuCompute && texture0.isCreated && texture1.isCreated -> {
+                    gpuStep(this)
+                    updateTexture(sizeX, sizeY, sizeZ)
+                    isComputing = false
                 }
-            } else {
-                step(g0, g1)
+                asyncCompute -> {
+                    pool += {
+                        step(g0, g1)
+                    }
+                }
+                else -> step(g0, g1)
             }
         }
         return 1 // if (isAlive) 1 else 16 // returning 16 causes issues, why?
@@ -328,17 +365,26 @@ class CellularAutomaton2 : ProceduralMesh() {
         }
     }
 
-    private fun createTexture(data: ByteBuffer, sizeX: Int, sizeY: Int, sizeZ: Int) {
-        if (texture.w != sizeX || texture.h != sizeY || texture.d != sizeZ) {
-            texture.destroy() // doesn't matter
-            texture.w = sizeX
-            texture.h = sizeY
-            texture.d = sizeZ
+    private fun updateTexture(sizeX: Int, sizeY: Int, sizeZ: Int) {
+        if (texture0.w != sizeX || texture0.h != sizeY || texture0.d != sizeZ) {
+            texture0.destroy() // doesn't matter
+            texture0.w = sizeX
+            texture0.h = sizeY
+            texture0.d = sizeZ
+            texture1.destroy()
+            texture1.w = sizeX
+            texture1.h = sizeY
+            texture1.d = sizeZ
         }
-        texture.createMonochrome(data)
-        shader.blocks = texture
+        shader.blocks = texture0
         shader.size.set(sizeX, sizeY, sizeZ)
         setColors()
+    }
+
+    private fun createTexture(data: ByteBuffer, sizeX: Int, sizeY: Int, sizeZ: Int) {
+        updateTexture(sizeX, sizeY, sizeZ)
+        texture0.createMonochrome(data)
+        if (gpuCompute) texture1.createMonochrome(data)
         Texture2D.bufferPool.returnBuffer(data)
     }
 
@@ -392,7 +438,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         super.destroy()
         chunkMeshes.forEachA { it.destroy() }
         chunkMeshes.clear()
-        texture.destroy()
+        texture0.destroy()
     }
 
     override val className = "CellularAutomaton2"
