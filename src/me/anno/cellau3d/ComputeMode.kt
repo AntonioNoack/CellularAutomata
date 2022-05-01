@@ -3,6 +3,7 @@ package me.anno.cellau3d
 import me.anno.cellau3d.grid.Grid
 import me.anno.utils.hpc.ProcessingGroup
 
+@Suppress("unused")
 enum class ComputeMode(val id: Int) {
 
     SIMPLE_SERIAL(0) {
@@ -152,6 +153,12 @@ enum class ComputeMode(val id: Int) {
             }
         }
     },
+
+    GPU(4) {
+        override fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules) {
+            throw UnsupportedOperationException("This mode must be executed on the GPU")
+        }
+    }
 
     ;
 

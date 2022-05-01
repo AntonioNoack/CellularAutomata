@@ -26,8 +26,9 @@ I've compiled a version including the dependencies into [Demo.jar](out/artifacts
 ## Simulation
 
 My focus went more towards GPU optimizations, because they were the bottleneck at 50³ cells at the start.
-Now, the CPU performance could be improved substantially, e.g. by using good multithreading (mine currently doesn't work efficiently, idk why).
-
+Now, the CPU performance could be improved substantially, e.g. by using good multithreading.
+Later, I added a GPU solver.
+Transferring the data from GPU back to CPU isn't implemented yet.
 
 ## Visualization
 

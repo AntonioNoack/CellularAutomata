@@ -6,6 +6,7 @@ import me.anno.gpu.shader.ComputeTextureMode
 import org.joml.Vector3i
 import kotlin.math.max
 
+// this could be transformed into a regular fragment shader, I just don't know yet how to render to them
 val shaders = NeighborHood.values()
     .associateWith { neighborHood ->
         val neighbors = neighborHood.neighbors
@@ -41,8 +42,6 @@ val shaders = NeighborHood.values()
 fun gpuStep(ca: CellularAutomaton2) {
 
     GFX.check()
-
-    println("running gpu step")
 
     val src = ca.texture0
     val dst = ca.texture1

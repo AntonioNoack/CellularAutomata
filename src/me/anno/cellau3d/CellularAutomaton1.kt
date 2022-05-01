@@ -209,7 +209,7 @@ class CellularAutomaton1 : MeshSpawner() {
 
     @DebugProperty
     @NotSerializedProperty
-    var nanosPerCell = 0L
+    var nanosPerCell = 0f
 
     @DebugProperty
     @NotSerializedProperty
@@ -254,20 +254,29 @@ class CellularAutomaton1 : MeshSpawner() {
 
     private val chunkMeshes = PairArrayList<Mesh, Transform>()
 
-    private fun step(g0: Grid, g1: Grid) {
+    private fun startTimer(): Long {
         val t0 = System.nanoTime()
         if (updatePeriod.isFinite()) {
             accumulatedTime = Maths.clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
         }
+        return t0
+    }
+
+    private fun stopTimer(g0: Grid, t0: Long) {
+        val t1 = System.nanoTime()
+        nanosPerCell = (t1 - t0).toFloat() / g0.size
+        ticksPerSecond = 1e9f / (t1 - t0)
+    }
+
+    private fun step(g0: Grid, g1: Grid) {
+        val t0 = startTimer()
         val src = if (g0 == lastSrc) g1 else g0
         val dst = if (src === g0) g1 else g0
         computeMode.compute(pool, src, dst, rules)
         isAlive = !dst.isEmpty()
         lastSrc = src
         isComputing = false
-        val t1 = System.nanoTime()
-        nanosPerCell = (t1 - t0) / g0.size
-        ticksPerSecond = 1e9f / (t1 - t0)
+        stopTimer(g0, t0)
         if (generateChunks) {
             generateChunks(dst)
         }

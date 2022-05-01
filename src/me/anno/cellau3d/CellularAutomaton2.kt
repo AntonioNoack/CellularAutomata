@@ -1,8 +1,10 @@
 package me.anno.cellau3d
 
+import me.anno.Build
 import me.anno.Engine
 import me.anno.cellau3d.CellularAutomaton1.Companion.pool
 import me.anno.cellau3d.Utils.parseFlags
+import me.anno.cellau3d.Utils.synchronizeGraphics
 import me.anno.cellau3d.grid.Grid
 import me.anno.cellau3d.grid.GridType
 import me.anno.cellau3d.grid.NibbleGridX64v2
@@ -18,6 +20,7 @@ import me.anno.gpu.texture.GPUFiltering
 import me.anno.gpu.texture.Texture2D
 import me.anno.gpu.texture.Texture3D
 import me.anno.io.serialization.NotSerializedProperty
+import me.anno.io.serialization.SerializedProperty
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
 import me.anno.ui.editor.PropertyInspector
@@ -255,26 +258,22 @@ class CellularAutomaton2 : ProceduralMesh() {
             g1?.clear()
         }
         // fake missing creation
+        texture0.isCreated = false
         texture1.isCreated = false
     }
 
     @DebugProperty
     @NotSerializedProperty
-    var nanosPerCell = 0L
+    var nanosPerCell = 0f
 
     @DebugProperty
     @NotSerializedProperty
     var ticksPerSecond = 0f
 
     var asyncCompute = true
-    var gpuCompute = false
-        set(value) {
-            if (field != value) {
-                field = value
-                // as a kind of reset
-                texture1.isCreated = false
-            }
-        }
+
+    private val gpuCompute
+        get() = computeMode == ComputeMode.GPU
 
     @DebugAction
     fun step() {
@@ -282,9 +281,12 @@ class CellularAutomaton2 : ProceduralMesh() {
         if (!isComputing) {
             val g0 = g0 ?: return
             val g1 = g1 ?: return
-            if (gpuCompute && texture0.isCreated && texture1.isCreated) {
+            if (gpuCompute) {
+                if (!texture0.isCreated || !texture1.isCreated) {
+                    updateTexture(g0)
+                }
                 gpuStep(this)
-                updateTexture(sizeX, sizeY, sizeZ)
+                updateTexture(g0)
             } else {
                 step(g0, g1)
             }
@@ -309,9 +311,20 @@ class CellularAutomaton2 : ProceduralMesh() {
         if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             when {
-                gpuCompute && texture0.isCreated && texture1.isCreated -> {
+                gpuCompute -> {
+                    if (!texture0.isCreated || !texture1.isCreated) {
+                        createTexture(g0)
+                    }
+                    // synchronization is needed for reliable time measurements
+                    // because OpenGL is an async API
+                    if (synchronizeGPU) synchronizeGraphics()
+                    val t0 = startTimer()
                     gpuStep(this)
-                    updateTexture(sizeX, sizeY, sizeZ)
+                    if (synchronizeGPU) {
+                        synchronizeGraphics()
+                        stopTimer(g0, t0)
+                    } else invalidateTimer()
+                    updateTexture(g0)
                     isComputing = false
                 }
                 asyncCompute -> {
@@ -325,47 +338,70 @@ class CellularAutomaton2 : ProceduralMesh() {
         return 1 // if (isAlive) 1 else 16 // returning 16 causes issues, why?
     }
 
+    @Docs("Delivers accurate time measurements, but slows down the whole engine")
+    @SerializedProperty
+    var synchronizeGPU = Build.isDebug
+
     private val chunkMeshes = PairArrayList<Mesh, Transform>()
 
-    private fun step(g0: Grid, g1: Grid) {
+    private fun startTimer(): Long {
         val t0 = System.nanoTime()
         if (updatePeriod.isFinite()) {
             accumulatedTime = clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
         }
+        return t0
+    }
+
+    private fun stopTimer(g0: Grid, t0: Long) {
+        val t1 = System.nanoTime()
+        nanosPerCell = (t1 - t0).toFloat() / g0.size
+        ticksPerSecond = 1e9f / (t1 - t0)
+    }
+
+    private fun invalidateTimer() {
+        nanosPerCell = Float.NaN
+        ticksPerSecond = Float.NaN
+    }
+
+    private fun step(g0: Grid, g1: Grid) {
+        val t0 = startTimer()
         val src = if (g0 == lastSrc) g1 else g0
         val dst = if (src === g0) g1 else g0
         computeMode.compute(pool, src, dst, rules)
         isAlive = !dst.isEmpty()
         lastSrc = src
         isComputing = false
-        val t1 = System.nanoTime()
-        nanosPerCell = (t1 - t0) / g0.size
-        ticksPerSecond = 1e9f / (t1 - t0)
+        stopTimer(g0, t0)
         // generate image for texture
-        val sizeX = dst.sx
-        val sizeY = dst.sy
-        val sizeZ = dst.sz
+        val data = packData(dst)
+        if (GFX.isGFXThread()) {
+            createTexture(dst, data)
+        } else {
+            GFX.addGPUTask(1) {
+                createTexture(dst, data)
+            }
+        }
+    }
+
+    private fun packData(dst: Grid): ByteBuffer {
         val data = Texture2D.bufferPool[sizeX * sizeY * sizeZ, false]
         data.position(0)
-        for (z in 0 until sizeZ) {
-            for (y in 0 until sizeY) {
-                for (x in 0 until sizeX) {
+        for (z in 0 until dst.sz) {
+            for (y in 0 until dst.sy) {
+                for (x in 0 until dst.sx) {
                     val color = dst.getStateIfFull(x, y, z).toByte()
                     data.put(color)
                 }
             }
         }
         data.position(0)
-        if (GFX.isGFXThread()) {
-            createTexture(data, sizeX, sizeY, sizeZ)
-        } else {
-            GFX.addGPUTask(1) {
-                createTexture(data, sizeX, sizeY, sizeZ)
-            }
-        }
+        return data
     }
 
-    private fun updateTexture(sizeX: Int, sizeY: Int, sizeZ: Int) {
+    private fun updateTexture(grid: Grid) {
+        val sizeX = grid.sx
+        val sizeY = grid.sy
+        val sizeZ = grid.sz
         if (texture0.w != sizeX || texture0.h != sizeY || texture0.d != sizeZ) {
             texture0.destroy() // doesn't matter
             texture0.w = sizeX
@@ -381,11 +417,16 @@ class CellularAutomaton2 : ProceduralMesh() {
         setColors()
     }
 
-    private fun createTexture(data: ByteBuffer, sizeX: Int, sizeY: Int, sizeZ: Int) {
-        updateTexture(sizeX, sizeY, sizeZ)
+    private fun createTexture(grid: Grid, data: ByteBuffer) {
+        updateTexture(grid)
         texture0.createMonochrome(data)
         if (gpuCompute) texture1.createMonochrome(data)
         Texture2D.bufferPool.returnBuffer(data)
+    }
+
+    private fun createTexture(grid: Grid) {
+        val data = packData(grid)
+        createTexture(grid, data)
     }
 
     private fun setColors() {
