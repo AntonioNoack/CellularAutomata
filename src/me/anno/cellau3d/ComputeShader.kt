@@ -7,6 +7,7 @@ import org.joml.Vector3i
 import kotlin.math.max
 
 // this could be transformed into a regular fragment shader, I just don't know yet how to render to them
+// todo when switching from cpu to gpu, the corners get activated... why???
 val shaders = NeighborHood.values()
     .associateWith { neighborHood ->
         val neighbors = neighborHood.neighbors

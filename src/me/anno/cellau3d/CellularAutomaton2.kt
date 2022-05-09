@@ -384,8 +384,7 @@ class CellularAutomaton2 : ProceduralMesh() {
     }
 
     private fun packData(dst: Grid): ByteBuffer {
-        val data = Texture2D.bufferPool[sizeX * sizeY * sizeZ, false]
-        data.position(0)
+        val data = Texture2D.bufferPool[sizeX * sizeY * sizeZ, false, false]
         for (z in 0 until dst.sz) {
             for (y in 0 until dst.sy) {
                 for (x in 0 until dst.sx) {
@@ -394,7 +393,7 @@ class CellularAutomaton2 : ProceduralMesh() {
                 }
             }
         }
-        data.position(0)
+        data.flip()
         return data
     }
 
