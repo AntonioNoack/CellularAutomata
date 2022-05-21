@@ -35,11 +35,12 @@ class CellMod : Mod() {
         fun main(args: Array<String>) {
             ExtensionLoader.loadMainInfo()
             // runEngine() // alternative
-            runDemo() // show case
+            runDemo() // showcase
         }
 
         private fun runDemo() {
             registerCustomClass(Material())
+            registerCustomClass(CellularAutomaton2())
             testUI {
                 DefaultConfig["debug.ui.showFPS"] = false
                 ECSRegistry.init()

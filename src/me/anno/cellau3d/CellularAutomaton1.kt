@@ -135,7 +135,7 @@ class CellularAutomaton1 : MeshSpawner() {
     fun makeCubic() {
         sizeY = sizeX
         sizeZ = sizeX
-        PropertyInspector.invalidateUI()
+        PropertyInspector.invalidateUI(true)
     }
 
     @DebugAction

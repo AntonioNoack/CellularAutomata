@@ -47,11 +47,9 @@ class CellularAutomaton2 : ProceduralMesh() {
     @NotSerializedProperty
     var texture1 = Texture3D("cells", 1, 1, 1)
 
-    private val material = Material.create()
-    private val shader = Texture3DBTMaterial()
+    private val material = Texture3DBTMaterial()
 
     init {
-        material.shader = shader
         mesh2.materialInst = material
         mesh2.inverseOutline = true // for correct outlines, since we render on the back faces
         texture0.filtering = GPUFiltering.TRULY_NEAREST
@@ -186,7 +184,7 @@ class CellularAutomaton2 : ProceduralMesh() {
             root.prefab?.set(prefabPath, "sizeZ", sizeZ)
         }
         invalidateMesh()
-        PropertyInspector.invalidateUI()
+        PropertyInspector.invalidateUI(true)
     }
 
     @DebugAction
@@ -377,7 +375,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         if (GFX.isGFXThread()) {
             createTexture(dst, data)
         } else {
-            GFX.addGPUTask(1) {
+            GFX.addGPUTask("CA::createTexture", 1) {
                 createTexture(dst, data)
             }
         }
@@ -411,8 +409,7 @@ class CellularAutomaton2 : ProceduralMesh() {
             texture1.h = sizeY
             texture1.d = sizeZ
         }
-        shader.blocks = texture0
-        shader.size.set(sizeX, sizeY, sizeZ)
+        material.blocks = texture0
         setColors()
     }
 
@@ -429,11 +426,9 @@ class CellularAutomaton2 : ProceduralMesh() {
     }
 
     private fun setColors() {
-        val c0 = color0
-        val c1 = color1
-        val div = max(1, states - 2)
-        shader.color0.set(c0).lerp(c1, 1f + 1f / div)
-        shader.color1.set(c0).lerp(c1, 1f - 255f / div)
+        material.color0.set(color0)
+        material.color1.set(color1)
+        material.limitColors(states - 1)
     }
 
     override fun generateMesh(mesh: Mesh) {

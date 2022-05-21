@@ -2,6 +2,7 @@ package me.anno.cellau3d
 
 import me.anno.cellau3d.grid.Grid
 import me.anno.utils.hpc.ProcessingGroup
+import me.anno.utils.hpc.WorkSplitter
 
 @Suppress("unused")
 enum class ComputeMode(val id: Int) {
