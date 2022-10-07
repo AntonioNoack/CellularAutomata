@@ -334,7 +334,6 @@ class CellularAutomaton1 : MeshSpawner() {
         }
     }
 
-    private val transforms = ArrayList<Transform>(256)
     override fun forEachMesh(run: (Mesh, Material?, Transform) -> Unit) {
         if (generateChunks) {
             try {
@@ -355,18 +354,12 @@ class CellularAutomaton1 : MeshSpawner() {
                 val states = max(2, states)
                 val global = transform!!.globalTransform
                 val materials = materials
-                val transforms = transforms
                 src.forAllFilled { x, y, z ->
-                    if (index >= transforms.size) {
-                        // allocate multiple, so they might lay
-                        // together in memory
-                        for (i in 0 until 64)
-                            transforms.add(Transform())
-                    }
-                    val transform = transforms[index++]
+                    val transform = getTransform(index++)
                     transform.globalTransform.set(global)
                         .translate(x - ox, y - oy, z - oz)
                     transform.teleportUpdate()
+                    transform.validate()
                     val matIndex = (src.getState(x, y, z) - 1) * (materials.size - 1) / max(1, states - 2)
                     run(mesh, materials[matIndex], transform)
                 }

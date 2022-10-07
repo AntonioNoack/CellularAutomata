@@ -50,8 +50,8 @@ class CellularAutomaton2 : ProceduralMesh() {
     private val material = Texture3DBTMaterial()
 
     init {
-        mesh2.materialInst = material
-        mesh2.inverseOutline = true // for correct outlines, since we render on the back faces
+        data.material = material.ref
+        data.inverseOutline = true // for correct outlines, since we render on the back faces
         texture0.filtering = GPUFiltering.TRULY_NEAREST
     }
 

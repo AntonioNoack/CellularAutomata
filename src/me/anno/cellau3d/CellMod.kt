@@ -58,7 +58,7 @@ class CellMod : Mod() {
                 val world = prefab.getSampleInstance() as Entity
                 val component = world.components.first()
                 EditorState.prefabSource = prefabSource
-                EditorState.select(component, component)
+                EditorState.select(component)
                 val list = CustomList(false, style)
                 val view = SceneView(EditorState, PlayMode.EDITING, style)
                 val properties = PropertyInspector({ EditorState.selection }, style)
