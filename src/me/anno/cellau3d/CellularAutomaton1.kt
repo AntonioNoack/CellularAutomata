@@ -1,26 +1,27 @@
 package me.anno.cellau3d
 
-import me.anno.Engine
+import me.anno.Time
 import me.anno.cellau3d.Utils.parseFlags
 import me.anno.cellau3d.grid.Grid
 import me.anno.cellau3d.grid.GridType
 import me.anno.cellau3d.grid.NibbleGridX64v2
 import me.anno.ecs.Transform
 import me.anno.ecs.annotations.*
-import me.anno.ecs.components.mesh.Material
+import me.anno.ecs.components.mesh.IMesh
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.MeshSpawner
+import me.anno.ecs.components.mesh.material.Material
 import me.anno.ecs.prefab.PrefabSaveable
-import me.anno.io.serialization.NotSerializedProperty
+import me.anno.engine.serialization.NotSerializedProperty
 import me.anno.maths.Maths
 import me.anno.maths.Maths.ceilDiv
 import me.anno.maths.Maths.max
-import me.anno.maths.Maths.mixARGB2
 import me.anno.mesh.Shapes
 import me.anno.mesh.vox.model.VoxelModel
 import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.b
 import me.anno.utils.Color.g
+import me.anno.utils.Color.mixARGB2
 import me.anno.utils.Color.r
 import me.anno.utils.hpc.ProcessingGroup
 import me.anno.utils.structures.lists.PairArrayList
@@ -231,7 +232,7 @@ class CellularAutomaton1 : MeshSpawner() {
             g1 = this.g1!!
             init1()
         }
-        accumulatedTime += Engine.deltaTime
+        accumulatedTime += Time.deltaTime.toFloat()
         if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             if (asyncCompute) {
@@ -305,7 +306,7 @@ class CellularAutomaton1 : MeshSpawner() {
                     val x0 = xi * cs
                     val y0 = yi * cs
                     val z0 = zi * cs
-                    val mesh0 = if (index < chunkMeshes.size) chunkMeshes.getA(index) else Mesh()
+                    val mesh0 = if (index < chunkMeshes.size) chunkMeshes.getFirst(index) else Mesh()
                     // min(cs, sizeX - x0), min(cs, sizeY - y0), min(cs, sizeZ - z0)
                     val mesh = object : VoxelModel(cs, cs, cs) {
                         override fun getBlock(x: Int, y: Int, z: Int): Int {
@@ -314,7 +315,7 @@ class CellularAutomaton1 : MeshSpawner() {
                             val zj = z0 + z
                             return if (grid.get(xj, yj, zj, 0) != 0) grid.getState(xj, yj, zj) else 0
                         }
-                    }.createMesh(palette, { _, _, _ -> false }, mesh0)
+                    }.createMesh(palette, null, null, mesh0)
                     mesh.invalidateGeometry()
                     if (index >= transforms.size) transforms.add(Transform())
                     val transform = transforms[index]
@@ -329,16 +330,16 @@ class CellularAutomaton1 : MeshSpawner() {
             }
         }
         for (i in chunkMeshes.size - 1 downTo index) {
-            chunkMeshes.getA(i).destroy()
+            chunkMeshes.getFirst(i).destroy()
             chunkMeshes.removeAt(i * 2)
         }
     }
 
-    override fun forEachMesh(run: (Mesh, Material?, Transform) -> Unit) {
+    override fun forEachMesh(run: (IMesh, Material?, Transform) -> Unit) {
         if (generateChunks) {
             try {
                 for (i in 0 until chunkMeshes.size) {
-                    run(chunkMeshes.getA(i), null, chunkMeshes.getB(i))
+                    run(chunkMeshes.getFirst(i), null, chunkMeshes.getSecond(i))
                 }
             } catch (e: NullPointerException) {
                 // we don't care
@@ -369,28 +370,28 @@ class CellularAutomaton1 : MeshSpawner() {
 
     override fun clone(): CellularAutomaton1 {
         val clone = CellularAutomaton1()
-        copy(clone)
+        copyInto(clone)
         return clone
     }
 
-    override fun copy(clone: PrefabSaveable) {
-        super.copy(clone)
-        clone as CellularAutomaton1
-        clone.sizeX = sizeX
-        clone.sizeY = sizeY
-        clone.sizeZ = sizeZ
-        clone.survives = survives
-        clone.births = births
-        clone.states = states
-        clone.neighborHood = neighborHood
-        clone.updatePeriod = updatePeriod
-        clone.gridType = gridType
-        clone.computeMode = computeMode
+    override fun copyInto(dst: PrefabSaveable) {
+        super.copyInto(dst)
+        dst as CellularAutomaton1
+        dst.sizeX = sizeX
+        dst.sizeY = sizeY
+        dst.sizeZ = sizeZ
+        dst.survives = survives
+        dst.births = births
+        dst.states = states
+        dst.neighborHood = neighborHood
+        dst.updatePeriod = updatePeriod
+        dst.gridType = gridType
+        dst.computeMode = computeMode
     }
 
     override fun destroy() {
         super.destroy()
-        chunkMeshes.forEachA { it.destroy() }
+        chunkMeshes.forEach { it.first.destroy() }
         chunkMeshes.clear()
     }
 

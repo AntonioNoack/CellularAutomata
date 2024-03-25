@@ -1,7 +1,7 @@
 package me.anno.cellau3d
 
 import me.anno.Build
-import me.anno.Engine
+import me.anno.Time
 import me.anno.cellau3d.CellularAutomaton1.Companion.pool
 import me.anno.cellau3d.Utils.parseFlags
 import me.anno.cellau3d.Utils.synchronizeGraphics
@@ -10,22 +10,22 @@ import me.anno.cellau3d.grid.GridType
 import me.anno.cellau3d.grid.NibbleGridX64v2
 import me.anno.ecs.Transform
 import me.anno.ecs.annotations.*
-import me.anno.ecs.components.mesh.Material
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
-import me.anno.ecs.components.shaders.Texture3DBTMaterial
+import me.anno.ecs.components.mesh.material.Texture3DBTMaterial
 import me.anno.ecs.prefab.PrefabSaveable
+import me.anno.engine.serialization.NotSerializedProperty
+import me.anno.engine.serialization.SerializedProperty
 import me.anno.gpu.GFX
-import me.anno.gpu.texture.GPUFiltering
+import me.anno.gpu.texture.Filtering
 import me.anno.gpu.texture.Texture2D
 import me.anno.gpu.texture.Texture3D
-import me.anno.io.serialization.NotSerializedProperty
-import me.anno.io.serialization.SerializedProperty
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
 import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
 import me.anno.utils.structures.lists.PairArrayList
+import me.anno.utils.types.Arrays.resize
 import org.apache.logging.log4j.LogManager
 import java.nio.ByteBuffer
 import java.util.*
@@ -52,7 +52,7 @@ class CellularAutomaton2 : ProceduralMesh() {
     init {
         data.material = material.ref
         data.inverseOutline = true // for correct outlines, since we render on the back faces
-        texture0.filtering = GPUFiltering.TRULY_NEAREST
+        texture0.filtering = Filtering.TRULY_NEAREST
     }
 
     @Type("Color3")
@@ -256,8 +256,8 @@ class CellularAutomaton2 : ProceduralMesh() {
             g1?.clear()
         }
         // fake missing creation
-        texture0.isCreated = false
-        texture1.isCreated = false
+        texture0.wasCreated = false
+        texture1.wasCreated = false
     }
 
     @DebugProperty
@@ -280,7 +280,7 @@ class CellularAutomaton2 : ProceduralMesh() {
             val g0 = g0 ?: return
             val g1 = g1 ?: return
             if (gpuCompute) {
-                if (!texture0.isCreated || !texture1.isCreated) {
+                if (!texture0.isCreated() || !texture1.isCreated()) {
                     updateTexture(g0)
                 }
                 gpuStep(this)
@@ -305,12 +305,12 @@ class CellularAutomaton2 : ProceduralMesh() {
             g1 = this.g1!!
             init1()
         }
-        accumulatedTime += Engine.deltaTime
+        accumulatedTime += Time.deltaTime.toFloat()
         if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             when {
                 gpuCompute -> {
-                    if (!texture0.isCreated || !texture1.isCreated) {
+                    if (!texture0.isCreated() || !texture1.isCreated()) {
                         createTexture(g0)
                     }
                     // synchronization is needed for reliable time measurements
@@ -325,11 +325,13 @@ class CellularAutomaton2 : ProceduralMesh() {
                     updateTexture(g0)
                     isComputing = false
                 }
+
                 asyncCompute -> {
                     pool += {
                         step(g0, g1)
                     }
                 }
+
                 else -> step(g0, g1)
             }
         }
@@ -399,15 +401,15 @@ class CellularAutomaton2 : ProceduralMesh() {
         val sizeX = grid.sx
         val sizeY = grid.sy
         val sizeZ = grid.sz
-        if (texture0.w != sizeX || texture0.h != sizeY || texture0.d != sizeZ) {
+        if (texture0.width != sizeX || texture0.height != sizeY || texture0.depth != sizeZ) {
             texture0.destroy() // doesn't matter
-            texture0.w = sizeX
-            texture0.h = sizeY
-            texture0.d = sizeZ
+            texture0.width = sizeX
+            texture0.height = sizeY
+            texture0.depth = sizeZ
             texture1.destroy()
-            texture1.w = sizeX
-            texture1.h = sizeY
-            texture1.d = sizeZ
+            texture1.width = sizeX
+            texture1.height = sizeY
+            texture1.depth = sizeZ
         }
         material.blocks = texture0
         setColors()
@@ -432,46 +434,49 @@ class CellularAutomaton2 : ProceduralMesh() {
     }
 
     override fun generateMesh(mesh: Mesh) {
-        val base = Shapes.flatCube.back
-        val positions = mesh.positions ?: base.positions!!
+        val base0 = Shapes.flatCube.back
+        val base = base0.positions!!
+        val positions = mesh.positions.resize(base.size)
         val sx = max(sizeX.toFloat() / 2f, 0.5f)
         val sy = max(sizeY.toFloat() / 2f, 0.5f)
         val sz = max(sizeZ.toFloat() / 2f, 0.5f)
         for (i in positions.indices step 3) {
             // use the sign to preserve the original shape,
             // since this function might run recursively on the original data
-            positions[i + 0] = sign(positions[i + 0]) * sx
-            positions[i + 1] = sign(positions[i + 1]) * sy
-            positions[i + 2] = sign(positions[i + 2]) * sz
+            positions[i + 0] = sign(base[i + 0]) * sx
+            positions[i + 1] = sign(base[i + 1]) * sy
+            positions[i + 2] = sign(base[i + 2]) * sz
         }
         mesh.positions = positions
+        mesh.indices = base0.indices
+        mesh.normals = base0.normals
         mesh.invalidateGeometry()
     }
 
     override fun clone(): CellularAutomaton2 {
         val clone = CellularAutomaton2()
-        copy(clone)
+        copyInto(clone)
         return clone
     }
 
-    override fun copy(clone: PrefabSaveable) {
-        super.copy(clone)
-        clone as CellularAutomaton2
-        clone.sizeX = sizeX
-        clone.sizeY = sizeY
-        clone.sizeZ = sizeZ
-        clone.survives = survives
-        clone.births = births
-        clone.states = states
-        clone.neighborHood = neighborHood
-        clone.updatePeriod = updatePeriod
-        clone.gridType = gridType
-        clone.computeMode = computeMode
+    override fun copyInto(dst: PrefabSaveable) {
+        super.copyInto(dst)
+        dst as CellularAutomaton2
+        dst.sizeX = sizeX
+        dst.sizeY = sizeY
+        dst.sizeZ = sizeZ
+        dst.survives = survives
+        dst.births = births
+        dst.states = states
+        dst.neighborHood = neighborHood
+        dst.updatePeriod = updatePeriod
+        dst.gridType = gridType
+        dst.computeMode = computeMode
     }
 
     override fun destroy() {
         super.destroy()
-        chunkMeshes.forEachA { it.destroy() }
+        chunkMeshes.forEach { it.first.destroy() }
         chunkMeshes.clear()
         texture0.destroy()
     }

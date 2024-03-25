@@ -6,7 +6,6 @@ import me.anno.utils.hpc.WorkSplitter
 
 @Suppress("unused")
 enum class ComputeMode(val id: Int) {
-
     SIMPLE_SERIAL(0) {
         override fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules) {
             // iterate over src and apply the rules
@@ -41,7 +40,6 @@ enum class ComputeMode(val id: Int) {
             }
         }
     },
-
     SIMPLE_PARALLEL(1) {
         override fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules) {
             // iterate over src and apply the rules
@@ -80,7 +78,6 @@ enum class ComputeMode(val id: Int) {
             }
         }
     },
-
     NEAR_CELLS_SERIAL(2) {
         override fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules) {
 
@@ -127,7 +124,7 @@ enum class ComputeMode(val id: Int) {
             val neighborHood = rules.neighborHood
             val healthy = rules.states - 1
 
-            // to do speed up the neighbor hoods (?) -> low priority, because rendering is slower than simulating currently anyways (50³)
+            // to do speed up the neighborhoods (?) -> low priority, because rendering is slower than simulating currently anyways (50³)
             src.forAllFilled(pool) { x, y, z ->
                 // cell alive -> check if it is dying
                 var state = src.getState(x, y, z)
@@ -154,14 +151,11 @@ enum class ComputeMode(val id: Int) {
             }
         }
     },
-
     GPU(4) {
         override fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules) {
             throw UnsupportedOperationException("This mode must be executed on the GPU")
         }
-    }
-
-    ;
+    };
 
     abstract fun compute(pool: ProcessingGroup, src: Grid, dst: Grid, rules: Rules)
 }

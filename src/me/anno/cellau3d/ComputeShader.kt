@@ -8,7 +8,7 @@ import kotlin.math.max
 
 // this could be transformed into a regular fragment shader, I just don't know yet how to render to them
 // todo when switching from cpu to gpu, the corners get activated... why???
-val shaders = NeighborHood.values()
+val shaders = NeighborHood.entries
     .associateWith { neighborHood ->
         val neighbors = neighborHood.neighbors
         ComputeShader(
@@ -54,8 +54,8 @@ fun gpuStep(ca: CellularAutomaton2) {
     shader.v1i("birthMask", rules.birth)
     shader.v1i("survivalMask", rules.survival)
     shader.v1i("maxState", max(2, rules.states - 1))
-    ComputeShader.bindTexture(0, src, ComputeTextureMode.READ)
-    ComputeShader.bindTexture(1, dst, ComputeTextureMode.WRITE)
+    shader.bindTexture(0, src, ComputeTextureMode.READ)
+    shader.bindTexture(1, dst, ComputeTextureMode.WRITE)
     shader.runBySize(ca.sizeX, ca.sizeY, ca.sizeZ)
 
     ca.swapTextures()
