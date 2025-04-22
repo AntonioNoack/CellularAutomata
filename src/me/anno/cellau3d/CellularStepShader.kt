@@ -17,7 +17,7 @@ import kotlin.math.max
 
 object CellularStepShader {
 
-    val shaders = LazyMap { neighborHood: NeighborHood ->
+    val shaders = LazyMap { neighborHood: Neighborhood ->
         val neighbors = neighborHood.neighbors
         Shader(
             "cells", emptyList(), coordsVertexShader,
@@ -59,22 +59,19 @@ object CellularStepShader {
     }
 
     private fun gpuStepImpl(ca: CellularAutomaton) {
-        val src = ca.texture0
-        val dst = ca.texture1
+        val src = ca.srcTexture
+        val dst = ca.dstTexture
 
         assertTrue(src.pointer > 0)
-        assertTrue(dst.pointer > 0)
         assertTrue(src.textures.isNotEmpty())
-        assertTrue(dst.textures.isNotEmpty())
         assertTrue(src.textures.all { it.isCreated() })
-        assertTrue(dst.textures.all { it.isCreated() })
 
-        val shader = shaders[ca.neighborHood]
+        val shader = shaders[ca.neighborhood]
         shader.use()
         shader.v3i("size", ca.sizeX, ca.sizeY, ca.sizeZ)
-        shader.v1i("birthMask", ca.rules.birth)
-        shader.v1i("survivalMask", ca.rules.survival)
-        shader.v1i("maxState", max(2, ca.rules.states - 1))
+        shader.v1i("birthMask", ca.getBirthFlags())
+        shader.v1i("survivalMask", ca.getSurvivalFlags())
+        shader.v1i("maxState", max(2, ca.numStates - 1))
         src.bindTexture0(shader, "src", Filtering.TRULY_NEAREST, Clamping.CLAMP)
         dst.draw(Renderer.colorRenderer) { z ->
             shader.v1i("layerZ", z)

@@ -2,10 +2,9 @@ package me.anno.cellau3d
 
 import me.anno.Time
 import me.anno.cellau3d.CellularStepShader.gpuStep
-import me.anno.cellau3d.Utils.parseFlags
-import me.anno.cellau3d.grid.Grid
-import me.anno.cellau3d.grid.GridType
-import me.anno.cellau3d.grid.NibbleGridX64v2
+import me.anno.cellau3d.Patterns.init4Impl
+import me.anno.cellau3d.Patterns.initBoundingBoxImpl
+import me.anno.cellau3d.FlagParser.parseFlags
 import me.anno.ecs.annotations.*
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
@@ -13,23 +12,19 @@ import me.anno.ecs.components.mesh.material.Texture3DBTMaterial
 import me.anno.ecs.prefab.PrefabSaveable
 import me.anno.ecs.systems.OnUpdate
 import me.anno.engine.serialization.NotSerializedProperty
-import me.anno.gpu.GFX
-import me.anno.gpu.GPUTasks.addGPUTask
 import me.anno.gpu.framebuffer.DepthBufferType
 import me.anno.gpu.framebuffer.Framebuffer3D
 import me.anno.gpu.framebuffer.TargetType
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
-import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
-import me.anno.utils.OS
 import me.anno.utils.assertions.assertEquals
+import me.anno.utils.callbacks.I3I
 import me.anno.utils.hpc.ProcessingGroup
 import me.anno.utils.pooling.Pools.byteBufferPool
 import me.anno.utils.types.Arrays.resize
 import org.apache.logging.log4j.LogManager
 import java.nio.ByteBuffer
-import java.util.*
 import kotlin.math.ceil
 import kotlin.math.log2
 import kotlin.math.max
@@ -48,7 +43,7 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         private val pool = ProcessingGroup("cells", 1f)
         private val targets = listOf(TargetType.UInt8x1)
 
-        private fun Framebuffer3D.createMonochrome(data: ByteBuffer) {
+        fun Framebuffer3D.createMonochrome(data: ByteBuffer) {
             ensure()
             val texture = getTexture0()
             val pointer = texture.pointer
@@ -58,10 +53,10 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
     }
 
     @NotSerializedProperty
-    var texture0 = Framebuffer3D("cells0", 1, 1, 1, targets, DepthBufferType.NONE)
+    var srcTexture = Framebuffer3D("cells0", 1, 1, 1, targets, DepthBufferType.NONE)
 
     @NotSerializedProperty
-    var texture1 = Framebuffer3D("cells1", 1, 1, 1, targets, DepthBufferType.NONE)
+    var dstTexture = Framebuffer3D("cells1", 1, 1, 1, targets, DepthBufferType.NONE)
 
     private val material = Texture3DBTMaterial()
 
@@ -84,63 +79,35 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
             setColors()
         }
 
-    @NotSerializedProperty
-    var g0: Grid? = null
-
-    @NotSerializedProperty
-    var g1: Grid? = null
-
-    var gridType = GridType.BYTE_ARRAY
-        set(value) {
-            if (field != value) {
-                field = value
-                reset()
-            }
-        }
-
     @Order(9)
     @Group("Rules")
     var survives = "4"
-        set(value) {
-            if (field != value) {
-                field = value
-                rules.survival = parseFlags(value)
-            }
-        }
 
     @Order(10)
     @Group("Rules")
     var births = "4"
-        set(value) {
-            if (field != value) {
-                field = value
-                rules.birth = parseFlags(value)
-            }
-        }
+
+    fun getSurvivalFlags(): Int {
+        return parseFlags(survives)
+    }
+
+    fun getBirthFlags(): Int {
+        return parseFlags(births)
+    }
 
     @Order(11)
     @Group("Rules")
     @Range(2.0, 1024.0)
-    var states = 2
+    var numStates = 2
         set(value) {
-            if (field != value && value >= 2) {
+            if (value >= 2) {
                 field = value
-                rules.states = value
-                reset()
             }
         }
 
     @Order(12)
     @Group("Rules")
-    var neighborHood = NeighborHood.MOORE
-        set(value) {
-            field = value
-            rules.neighborHood = value
-            if (g0 is NibbleGridX64v2) reset()
-        }
-
-    @NotSerializedProperty
-    val rules = Rules(16, 16, states, neighborHood)
+    var neighborhood = Neighborhood.MOORE
 
     @Range(1.0, 1e9)
     var sizeX = 10
@@ -148,7 +115,6 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
             if (field != value) {
                 field = value
                 invalidateMesh()
-                reset()
             }
         }
 
@@ -158,7 +124,6 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
             if (field != value) {
                 field = value
                 invalidateMesh()
-                reset()
             }
         }
 
@@ -168,68 +133,46 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
             if (field != value) {
                 field = value
                 invalidateMesh()
-                reset()
             }
         }
 
-    var computeMode = ComputeMode.SIMPLE_SERIAL
-
     fun swapTextures() {
-        val tmp = texture0
-        texture0 = texture1
-        texture1 = tmp
-    }
-
-    @DebugAction
-    fun reset() {
-        g0 = null
-        g1 = null
-        isComputing = false
-        accumulatedTime = 0.0
-        invalidateAABB()
+        val tmp = srcTexture
+        srcTexture = dstTexture
+        dstTexture = tmp
     }
 
     @DebugAction
     fun makeCubic() {
         sizeY = sizeX
         sizeZ = sizeX
-        val prefabPath = prefabPath
-        root.prefab?.set(prefabPath, "sizeY", sizeY)
-        root.prefab?.set(prefabPath, "sizeZ", sizeZ)
         invalidateMesh()
-        PropertyInspector.invalidateUI(true)
     }
 
     @DebugAction
     fun init1() {
-        clearGrid()
-        val src = if (g0 == lastSrc) g1 else g0
-        if (src != null) {
-            val cx = sizeX / 2
-            val cy = sizeY / 2
-            val cz = sizeZ / 2
-            src.set(cx, cy, cz, 1)
-            src.setState(cx, cy, cz, states - 1)
-            isAlive = true
+        ensureCorrectSize()
+        val cx = sizeX / 2
+        val cy = sizeY / 2
+        val cz = sizeZ / 2
+        val buffer = fillData { x, y, z ->
+            if (cx == x && cy == y && cz == z) numStates - 1
+            else 0
         }
+        srcTexture.createMonochrome(buffer)
+        dstTexture.createMonochrome(buffer)
+        byteBufferPool.returnBuffer(buffer)
     }
 
     @DebugAction
     fun init4() {
-        clearGrid()
-        val src = if (g0 == lastSrc) g1 else g0
-        if (src != null) {
-            src.createNoise(4, 0.5f, states - 1, Random())
-            isAlive = !src.isEmpty()
-        }
+        init4Impl()
     }
 
-    @NotSerializedProperty
-    var lastSrc: Grid? = null
-
-    @DebugProperty
-    @NotSerializedProperty
-    var isAlive = false
+    @DebugAction
+    fun initBoundingBox() {
+        initBoundingBoxImpl()
+    }
 
     @DebugProperty
     var updatePeriod = 0.5
@@ -238,63 +181,16 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
     @NotSerializedProperty
     var accumulatedTime = 0.0
 
-    @DebugProperty
-    @NotSerializedProperty
-    var isComputing = false
-
     @NotSerializedProperty
     val stateBits
-        get() = ceil(log2(states.toFloat())).toInt()
-
-    private fun createGrid() {
-        val sx = sizeX
-        val sy = sizeY
-        val sz = sizeZ
-        val g0 = g0
-        if ((g0 == null || g1 == null) || g0.sx != sx || g0.sy != sy || g0.sz != sz || g0.stateBits != stateBits) {
-            this.g0 = gridType.create(this)
-            this.g1 = gridType.create(this)
-        } else {
-            g0.clear()
-            g1?.clear()
-        }
-    }
-
-    @NotSerializedProperty
-    private var isCreated = false
+        get() = ceil(log2(numStates.toFloat())).toInt()
 
     private fun isCreated1(): Boolean {
-        return isCreated &&
-                texture0.pointer > 0 &&
-                texture1.pointer > 0 &&
-                texture0.getTexture0().isCreated() &&
-                texture1.getTexture0().isCreated()
+        return srcTexture.pointer > 0 &&
+                dstTexture.pointer > 0 &&
+                srcTexture.getTexture0().isCreated() &&
+                dstTexture.getTexture0().isCreated()
     }
-
-    @DebugAction
-    fun clearGrid() {
-        if (g0 == null || g1 == null) {
-            createGrid()
-        } else {
-            g0?.clear()
-            g1?.clear()
-        }
-        // fake missing creation
-        isCreated = false
-    }
-
-    @DebugProperty
-    @NotSerializedProperty
-    var nanosPerCell = 0f
-
-    @DebugProperty
-    @NotSerializedProperty
-    var ticksPerSecond = 0f
-
-    var asyncCompute = true
-
-    private val gpuCompute
-        get() = computeMode == ComputeMode.GPU
 
     @DebugAction
     fun step() {
@@ -302,104 +198,45 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         stepImpl()
     }
 
-    private fun stepImpl() {
-        if (isComputing) return
-        isComputing = true
-        val g0 = g0 ?: return
-        val g1 = g1 ?: return
-
+    private fun updateTime() {
         if (updatePeriod.isFinite()) {
             accumulatedTime = clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
         }
-
-        if (gpuCompute) {
-            if (!isCreated1()) {
-                createTexture(g0)
-            }
-            gpuStep(this)
-            updateTexture(g0)
-            isComputing = false
-        } else {
-            if (!OS.isWeb && asyncCompute) pool += { stepCpuImpl(g0, g1) }
-            else stepCpuImpl(g0, g1)
-        }
     }
 
-    @DebugAction("Steps: 1/s")
-    @Order(1)
-    fun autoSteps1() {
-        updatePeriod = 1.0
-        accumulatedTime = 0.0
+    private fun stepImpl() {
+        updateTime()
+        if (!isCreated1()) init1()
+        gpuStep(this)
+        show()
     }
 
-    @DebugAction("Steps: 2/s")
-    @Order(2)
-    fun autoSteps05() {
-        updatePeriod = 0.5
-        accumulatedTime = 0.0
-    }
-
-    @DebugAction("Steps: 5/s")
-    @Order(3)
-    fun autoSteps025() {
-        updatePeriod = 0.25
-        accumulatedTime = 0.0
-    }
-
-    @DebugAction("Steps: 10/s")
-    @Order(4)
-    fun autoSteps01() {
-        updatePeriod = 0.1
-        accumulatedTime = 0.0
-    }
-
-    @DebugAction("Steps: Max/s")
-    @Order(5)
-    fun autoSteps0() {
-        updatePeriod = 0.0
-        accumulatedTime = 0.0
+    private fun show() {
+        material.blocks = srcTexture.getTexture0()
+        setColors()
     }
 
     override fun onUpdate() {
-        if (stateBits < 1) {
-            LOGGER.warn("Missing states")
-            return
-        }
-        if (g0 == null || g1 == null) {
+        ensureCorrectSize()
+        if (!isCreated1()) {
             LOGGER.info("Creating field")
-            createGrid()
             init1()
         }
         accumulatedTime += Time.deltaTime
-        if (isAlive && accumulatedTime > updatePeriod) {
+        if (accumulatedTime > updatePeriod) {
             stepImpl()
         }
     }
 
-    private fun stepCpuImpl(g0: Grid, g1: Grid) {
-        val src = if (g0 == lastSrc) g1 else g0
-        val dst = if (src === g0) g1 else g0
-        computeMode.compute(pool, src, dst, rules)
-        isAlive = !dst.isEmpty()
-        lastSrc = src
-        isComputing = false
-        // generate image for texture
-        val data = packData(dst)
-        if (GFX.isGFXThread()) {
-            createTexture(dst, data)
-        } else {
-            addGPUTask("CA::createTexture", 1) {
-                createTexture(dst, data)
-            }
-        }
-    }
-
-    private fun packData(dst: Grid): ByteBuffer {
+    fun fillData(fillFunction: I3I): ByteBuffer {
+        val sizeX = sizeX
+        val sizeY = sizeY
+        val sizeZ = sizeZ
         val data = byteBufferPool[sizeX * sizeY * sizeZ, false, false]
-        for (z in 0 until dst.sz) {
-            for (y in 0 until dst.sy) {
-                for (x in 0 until dst.sx) {
-                    val color = dst.getStateIfFull(x, y, z).toByte()
+        for (z in 0 until sizeZ) {
+            for (y in 0 until sizeY) {
+                for (x in 0 until sizeX) {
+                    val color = fillFunction.call(x, y, z).toByte()
                     data.put(color)
                 }
             }
@@ -408,44 +245,24 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         return data
     }
 
-    private fun updateTexture(grid: Grid) {
-        val sizeX = grid.sx
-        val sizeY = grid.sy
-        val sizeZ = grid.sz
-        if (texture0.width != sizeX || texture0.height != sizeY || texture0.depth != sizeZ) {
-            texture0.destroy() // doesn't matter
-            texture0.width = sizeX
-            texture0.height = sizeY
-            texture0.depth = sizeZ
-            texture1.destroy()
-            texture1.width = sizeX
-            texture1.height = sizeY
-            texture1.depth = sizeZ
-            isCreated = false
-        }
-        material.blocks = texture0.getTexture0()
-        setColors()
+    fun ensureCorrectSize() {
+        ensureCorrectSize(srcTexture)
+        ensureCorrectSize(dstTexture)
     }
 
-    private fun createTexture(grid: Grid, data: ByteBuffer) {
-        updateTexture(grid)
-        if (!gpuCompute || !isCreated1()) {
-            texture0.createMonochrome(data)
-            if (gpuCompute) texture1.createMonochrome(data)
+    private fun ensureCorrectSize(texture: Framebuffer3D) {
+        if (texture.width != sizeX || texture.height != sizeY || texture.depth != sizeZ) {
+            texture.destroy() // doesn't matter
+            texture.width = sizeX
+            texture.height = sizeY
+            texture.depth = sizeZ
         }
-        byteBufferPool.returnBuffer(data)
-        isCreated = true
-    }
-
-    private fun createTexture(grid: Grid) {
-        val data = packData(grid)
-        createTexture(grid, data)
     }
 
     private fun setColors() {
         material.color0.set(color0)
         material.color1.set(color1)
-        material.limitColors(states - 1)
+        material.limitColors(numStates - 1)
     }
 
     override fun generateMesh(mesh: Mesh) {
@@ -469,12 +286,6 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         mesh.invalidateGeometry()
     }
 
-    override fun clone(): CellularAutomaton {
-        val clone = CellularAutomaton()
-        copyInto(clone)
-        return clone
-    }
-
     override fun copyInto(dst: PrefabSaveable) {
         super.copyInto(dst)
         dst as CellularAutomaton
@@ -483,17 +294,15 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         dst.sizeZ = sizeZ
         dst.survives = survives
         dst.births = births
-        dst.states = states
-        dst.neighborHood = neighborHood
+        dst.numStates = numStates
+        dst.neighborhood = neighborhood
         dst.updatePeriod = updatePeriod
-        dst.gridType = gridType
-        dst.computeMode = computeMode
     }
 
     override fun destroy() {
         super.destroy()
-        texture0.destroy()
-        texture1.destroy()
+        srcTexture.destroy()
+        dstTexture.destroy()
     }
 
     override val className = "CellularAutomaton2"

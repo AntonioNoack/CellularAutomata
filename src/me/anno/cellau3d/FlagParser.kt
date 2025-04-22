@@ -1,19 +1,9 @@
 package me.anno.cellau3d
 
-import me.anno.gpu.GFX
-import org.lwjgl.opengl.GL11
 import kotlin.math.max
 import kotlin.math.min
 
-object Utils {
-
-    fun synchronizeGraphics() {
-        GFX.checkIsGFXThread()
-        GL11.glFlush()
-        GL11.glFinish() // wait for everything to be drawn
-        // should be enough for synchronization
-    }
-
+object FlagParser {
     fun parseFlags(str: String, min: Int = 1, max: Int = 26): Int {
         var result = 0
         // input: 1-2, 3, 4,5
