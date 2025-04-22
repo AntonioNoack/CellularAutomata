@@ -21,7 +21,8 @@ There are no dependencies besides my engine.
 
 ## Run Sample
 
-I've compiled a version including the dependencies into [Demo.jar](out/artifacts/Demo/Demo.jar). It should run on Windows and Linux.
+Visit the [releases page](https://github.com/AntonioNoack/CellularAutomata/releases), download and run it.
+I might create a web-build in the future.
 
 ## Simulation
 

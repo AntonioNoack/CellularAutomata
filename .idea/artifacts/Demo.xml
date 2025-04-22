@@ -6,7 +6,7 @@
       <element id="extracted-dir" path="$KOTLIN_BUNDLED$/lib/kotlin-stdlib.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$KOTLIN_BUNDLED$/lib/kotlin-reflect.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$KOTLIN_BUNDLED$/lib/kotlin-test.jar" path-in-jar="/" />
-      <element id="extracted-dir" path="$PROJECT_DIR$/../VideoStudio/out/artifacts/Universal/VideoStudio.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/../RemsEngine/out/artifacts/Universal/RemsEngine.jar" path-in-jar="/" />
     </root>
   </artifact>
 </component>
