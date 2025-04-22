@@ -4,13 +4,15 @@ import kotlin.math.max
 import kotlin.math.min
 
 object FlagParser {
+    /**
+     * input: 1-5, 7, 12,
+     * intermediate: 1,2,3,4,5,7,12,
+     * output: 1<<1 + 1<<2 + ... + 1<<5 + 1<<7 + 1<<12
+     * */
     fun parseFlags(str: String, min: Int = 1, max: Int = 26): Int {
         var result = 0
-        // input: 1-2, 3, 4,5
-        // 3-4-5
-        // output: flags
         var i = 0
-        var lastNum = -1
+        var lastNumber = -1
         var hadSplitter = false
         while (i < str.length) {
             when (str[i]) {
@@ -22,24 +24,24 @@ object FlagParser {
                         i++
                     }
                     when {
-                        hadSplitter && lastNum > -1 -> {
+                        hadSplitter && lastNumber > -1 -> {
                             // range
-                            val i0 = lastNum
+                            val i0 = lastNumber
                             val i1 = num
                             for (v in max(i0, min)..min(i1, max)) {
                                 result = result or (1 shl v)
                             }
                             hadSplitter = false
-                            lastNum = -1
+                            lastNumber = -1
                         }
-                        lastNum in min..max -> {
+                        lastNumber in min..max -> {
                             hadSplitter = false
-                            result = result or (1 shl lastNum)
-                            lastNum = num
+                            result = result or (1 shl lastNumber)
+                            lastNumber = num
                         }
                         else -> {
                             hadSplitter = false
-                            lastNum = num
+                            lastNumber = num
                         }
                     }
                 }
@@ -50,8 +52,8 @@ object FlagParser {
                 else -> i++
             }
         }
-        if (lastNum in min..max) {
-            result = result or (1 shl lastNum)
+        if (lastNumber in min..max) {
+            result = result or (1 shl lastNumber)
         }
         return result
     }

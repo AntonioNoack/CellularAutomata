@@ -2,9 +2,9 @@ package me.anno.cellau3d
 
 import me.anno.Time
 import me.anno.cellau3d.CellularStepShader.gpuStep
+import me.anno.cellau3d.FlagParser.parseFlags
 import me.anno.cellau3d.Patterns.init4Impl
 import me.anno.cellau3d.Patterns.initBoundingBoxImpl
-import me.anno.cellau3d.FlagParser.parseFlags
 import me.anno.ecs.annotations.*
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
@@ -24,9 +24,8 @@ import me.anno.utils.hpc.ProcessingGroup
 import me.anno.utils.pooling.Pools.byteBufferPool
 import me.anno.utils.types.Arrays.resize
 import org.apache.logging.log4j.LogManager
+import org.joml.Vector3f
 import java.nio.ByteBuffer
-import kotlin.math.ceil
-import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.sign
 
@@ -66,14 +65,14 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
     }
 
     @Type("Color3")
-    var color0 = 0x1d73d3.toVecRGB()
+    var color0: Vector3f = 0x1d73d3.toVecRGB()
         set(value) {
             field.set(value)
             setColors()
         }
 
     @Type("Color3")
-    var color1 = 0xffffff.toVecRGB()
+    var color1: Vector3f = 0xffffff.toVecRGB()
         set(value) {
             field.set(value)
             setColors()
@@ -151,14 +150,18 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
 
     @DebugAction
     fun init1() {
-        ensureCorrectSize()
         val cx = sizeX / 2
         val cy = sizeY / 2
         val cz = sizeZ / 2
-        val buffer = fillData { x, y, z ->
+        initWithFunction { x, y, z ->
             if (cx == x && cy == y && cz == z) numStates - 1
             else 0
         }
+    }
+
+    fun initWithFunction(fillFunction: I3I) {
+        ensureCorrectSize()
+        val buffer = fillData(fillFunction)
         srcTexture.createMonochrome(buffer)
         dstTexture.createMonochrome(buffer)
         byteBufferPool.returnBuffer(buffer)
@@ -180,10 +183,6 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
     @DebugProperty
     @NotSerializedProperty
     var accumulatedTime = 0.0
-
-    @NotSerializedProperty
-    val stateBits
-        get() = ceil(log2(numStates.toFloat())).toInt()
 
     private fun isCreated1(): Boolean {
         return srcTexture.pointer > 0 &&
@@ -211,7 +210,7 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         show()
     }
 
-    private fun show() {
+    fun show() {
         material.blocks = srcTexture.getTexture0()
         setColors()
     }

@@ -1,8 +1,6 @@
 package me.anno.cellau3d
 
-import me.anno.gpu.GFXState.timeRendering
 import me.anno.gpu.buffer.SimpleBuffer.Companion.flat01
-import me.anno.gpu.query.GPUClockNanos
 import me.anno.gpu.shader.GLSLType
 import me.anno.gpu.shader.Shader
 import me.anno.gpu.shader.ShaderLib.coordsVertexShader
@@ -35,30 +33,24 @@ object CellularStepShader {
                     "       return int(texelFetch(src,pos,0).x * 255.0);\n" +
                     "   } else return 0;\n" +
                     "}\n" +
-                    "void main(){\n" +
+                    "void main() {\n" +
                     "   ivec3 pos = ivec3(ivec2(gl_FragCoord.xy), layerZ);\n" +
                     "   int oldState = getValueAt(pos);\n" +
                     "   int sum = " +
                     neighbors.joinToString("+") {
                         "min(1,getValueAt(pos+ivec3(${it.x},${it.y},${it.z})))"
                     } + ";\n" +
-                    "    int birthState = ((birthMask >> sum) & 1) > 0 ? maxState : 0;\n" +
-                    "    int survivalState = (oldState != maxState) || (((survivalMask >> sum) & 1) == 0) ? oldState-1 : oldState;\n" +
-                    "    int newState = oldState == 0 ? birthState : survivalState;\n" +
-                    "    result = vec4(vec3(newState / 255.0), 1.0);\n" +
+                    "   int mask = 0 == oldState ? birthMask :\n" +
+                    "       maxState == oldState ? survivalMask :\n" +
+                    "                              0;\n" +
+                    "   bool hasMask = ((mask >> sum) & 1) != 0;\n" +
+                    "   int newState = hasMask ? maxState : max(oldState-1,0);\n" +
+                    "   result = vec4(vec3(newState / 255.0), 1.0);\n" +
                     "}\n"
         )
     }
 
-    private val timer = GPUClockNanos()
-
     fun gpuStep(ca: CellularAutomaton) {
-        timeRendering("Cellular Step", timer) {
-            gpuStepImpl(ca)
-        }
-    }
-
-    private fun gpuStepImpl(ca: CellularAutomaton) {
         val src = ca.srcTexture
         val dst = ca.dstTexture
 
@@ -71,7 +63,7 @@ object CellularStepShader {
         shader.v3i("size", ca.sizeX, ca.sizeY, ca.sizeZ)
         shader.v1i("birthMask", ca.getBirthFlags())
         shader.v1i("survivalMask", ca.getSurvivalFlags())
-        shader.v1i("maxState", max(2, ca.numStates - 1))
+        shader.v1i("maxState", max(1, ca.numStates - 1))
         src.bindTexture0(shader, "src", Filtering.TRULY_NEAREST, Clamping.CLAMP)
         dst.draw(Renderer.colorRenderer) { z ->
             shader.v1i("layerZ", z)
