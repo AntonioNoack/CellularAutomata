@@ -23,8 +23,7 @@ class CellMod : Mod() {
 
     override fun onInit() {
         super.onInit()
-        registerCustomClass(CellularAutomaton1())
-        registerCustomClass(CellularAutomaton2())
+        registerCustomClass(CellularAutomaton())
     }
 
     companion object {
@@ -38,12 +37,10 @@ class CellMod : Mod() {
         @JvmStatic
         fun createGame(): Panel {
 
-            // todo bug: GPU mode is broken
-
             showFPS = false
             enableVSync = true
 
-            val logic = CellularAutomaton2().apply {
+            val logic = CellularAutomaton().apply {
                 sizeX = 100
                 sizeY = 100
                 sizeZ = 100
@@ -51,7 +48,7 @@ class CellMod : Mod() {
                 survives = ""
                 states = 5
                 neighborHood = NeighborHood.VON_NEUMANN
-                updatePeriod = 0.1f
+                updatePeriod = 0.1
             }
 
             val world = Entity().add(logic)

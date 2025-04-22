@@ -2,7 +2,7 @@ package me.anno.cellau3d
 
 import me.anno.Build
 import me.anno.Time
-import me.anno.cellau3d.CellularAutomaton1.Companion.pool
+import me.anno.cellau3d.CellularStepShader.gpuStep
 import me.anno.cellau3d.Utils.parseFlags
 import me.anno.cellau3d.Utils.synchronizeGraphics
 import me.anno.cellau3d.grid.Grid
@@ -19,12 +19,15 @@ import me.anno.engine.serialization.NotSerializedProperty
 import me.anno.engine.serialization.SerializedProperty
 import me.anno.gpu.GFX
 import me.anno.gpu.GPUTasks.addGPUTask
-import me.anno.gpu.texture.Filtering
-import me.anno.gpu.texture.Texture3D
+import me.anno.gpu.framebuffer.DepthBufferType
+import me.anno.gpu.framebuffer.Framebuffer3D
+import me.anno.gpu.framebuffer.TargetType
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
 import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
+import me.anno.utils.assertions.assertEquals
+import me.anno.utils.hpc.ProcessingGroup
 import me.anno.utils.pooling.Pools.byteBufferPool
 import me.anno.utils.structures.lists.PairArrayList
 import me.anno.utils.types.Arrays.resize
@@ -41,20 +44,34 @@ import kotlin.math.sign
  * displays the grid with a raytracing fragment shader
  * */
 @Suppress("unused")
-class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
+class CellularAutomaton : ProceduralMesh(), OnUpdate {
+
+    companion object {
+        private val LOGGER = LogManager.getLogger(CellularAutomaton::class)
+
+        private val pool = ProcessingGroup("cells", 1f)
+        private val targets = listOf(TargetType.UInt8x1)
+
+        private fun Framebuffer3D.createMonochrome(data: ByteBuffer) {
+            ensure()
+            val texture = getTexture0()
+            val pointer = texture.pointer
+            texture.createMonochrome(data)
+            assertEquals(pointer, texture.pointer)
+        }
+    }
 
     @NotSerializedProperty
-    var texture0 = Texture3D("cells", 1, 1, 1)
+    var texture0 = Framebuffer3D("cells0", 1, 1, 1, targets, DepthBufferType.NONE)
 
     @NotSerializedProperty
-    var texture1 = Texture3D("cells", 1, 1, 1)
+    var texture1 = Framebuffer3D("cells1", 1, 1, 1, targets, DepthBufferType.NONE)
 
     private val material = Texture3DBTMaterial()
 
     init {
         data.material = material.ref
         data.inverseOutline = true // for correct outlines, since we render on the back faces
-        texture0.filtering = Filtering.TRULY_NEAREST
     }
 
     @Type("Color3")
@@ -172,7 +189,7 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
         g0 = null
         g1 = null
         isComputing = false
-        accumulatedTime = 0f
+        accumulatedTime = 0.0
         invalidateAABB()
     }
 
@@ -219,11 +236,11 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
     var isAlive = false
 
     @DebugProperty
-    var updatePeriod = 0.5f
+    var updatePeriod = 0.5
 
     @DebugProperty
     @NotSerializedProperty
-    var accumulatedTime = 0f
+    var accumulatedTime = 0.0
 
     @DebugProperty
     @NotSerializedProperty
@@ -247,6 +264,17 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
         }
     }
 
+    @NotSerializedProperty
+    private var isCreated = false
+
+    private fun isCreated1(): Boolean {
+        return isCreated &&
+                texture0.pointer > 0 &&
+                texture1.pointer > 0 &&
+                texture0.getTexture0().isCreated() &&
+                texture1.getTexture0().isCreated()
+    }
+
     @DebugAction
     fun clearGrid() {
         if (g0 == null || g1 == null) {
@@ -256,8 +284,7 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
             g1?.clear()
         }
         // fake missing creation
-        texture0.wasCreated = false
-        texture1.wasCreated = false
+        isCreated = false
     }
 
     @DebugProperty
@@ -275,12 +302,12 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
 
     @DebugAction
     fun step() {
-        updatePeriod = Float.POSITIVE_INFINITY
+        updatePeriod = Double.POSITIVE_INFINITY
         if (!isComputing) {
             val g0 = g0 ?: return
             val g1 = g1 ?: return
             if (gpuCompute) {
-                if (!texture0.isCreated() || !texture1.isCreated()) {
+                if (!isCreated1()) {
                     updateTexture(g0)
                 }
                 gpuStep(this)
@@ -305,12 +332,12 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
             g1 = this.g1!!
             init1()
         }
-        accumulatedTime += Time.deltaTime.toFloat()
+        accumulatedTime += Time.deltaTime
         if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
             isComputing = true
             when {
                 gpuCompute -> {
-                    if (!texture0.isCreated() || !texture1.isCreated()) {
+                    if (!isCreated1()) {
                         createTexture(g0)
                     }
                     // synchronization is needed for reliable time measurements
@@ -409,16 +436,20 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
             texture1.width = sizeX
             texture1.height = sizeY
             texture1.depth = sizeZ
+            isCreated = false
         }
-        material.blocks = texture0
+        material.blocks = texture0.getTexture0()
         setColors()
     }
 
     private fun createTexture(grid: Grid, data: ByteBuffer) {
         updateTexture(grid)
-        texture0.createMonochrome(data)
-        if (gpuCompute) texture1.createMonochrome(data)
+        if(!gpuCompute || !isCreated1()) {
+            texture0.createMonochrome(data)
+            if (gpuCompute) texture1.createMonochrome(data)
+        }
         byteBufferPool.returnBuffer(data)
+        isCreated = true
     }
 
     private fun createTexture(grid: Grid) {
@@ -433,34 +464,35 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
     }
 
     override fun generateMesh(mesh: Mesh) {
-        val base0 = Shapes.flatCube.back
-        val base = base0.positions!!
-        val positions = mesh.positions.resize(base.size)
+        val srcMesh = Shapes.flatCube.back
+        val srcPositions = srcMesh.positions!!
+        val dstPositions = mesh.positions.resize(srcPositions.size)
         val sx = max(sizeX, 1).toFloat() * 0.5f
         val sy = max(sizeY, 1).toFloat() * 0.5f
         val sz = max(sizeZ, 1).toFloat() * 0.5f
-        for (i in positions.indices step 3) {
+        for (i in dstPositions.indices step 3) {
             // use the sign to preserve the original shape,
             // since this function might run recursively on the original data
-            positions[i + 0] = sign(base[i + 0]) * sx
-            positions[i + 1] = sign(base[i + 1]) * sy
-            positions[i + 2] = sign(base[i + 2]) * sz
+            dstPositions[i + 0] = sign(srcPositions[i + 0]) * sx
+            dstPositions[i + 1] = sign(srcPositions[i + 1]) * sy
+            dstPositions[i + 2] = sign(srcPositions[i + 2]) * sz
         }
-        mesh.positions = positions
-        mesh.indices = base0.indices
-        mesh.normals = base0.normals
+        mesh.positions = dstPositions
+        mesh.indices = srcMesh.indices
+        mesh.normals = srcMesh.normals
+        mesh.cullMode = srcMesh.cullMode
         mesh.invalidateGeometry()
     }
 
-    override fun clone(): CellularAutomaton2 {
-        val clone = CellularAutomaton2()
+    override fun clone(): CellularAutomaton {
+        val clone = CellularAutomaton()
         copyInto(clone)
         return clone
     }
 
     override fun copyInto(dst: PrefabSaveable) {
         super.copyInto(dst)
-        dst as CellularAutomaton2
+        dst as CellularAutomaton
         dst.sizeX = sizeX
         dst.sizeY = sizeY
         dst.sizeZ = sizeZ
@@ -481,9 +513,5 @@ class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
     }
 
     override val className = "CellularAutomaton2"
-
-    companion object {
-        private val LOGGER = LogManager.getLogger(CellularAutomaton2::class)
-    }
 
 }

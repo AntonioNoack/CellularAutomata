@@ -1,6 +1,7 @@
 package me.anno.cellau3d
 
 import me.anno.cellau3d.grid.Grid
+import me.anno.cellau3d.grid.NibbleGridX64v2
 import org.joml.Vector3i
 
 @Suppress("unused")
@@ -41,6 +42,7 @@ enum class NeighborHood(val id: Int, val neighbors: Array<Vector3i>) {
         )
     ) {
         override fun count(grid: Grid, x: Int, y: Int, z: Int): Int {
+            if (grid is NibbleGridX64v2) return grid.getCount(x, y, z)
             // if(grid is GridV2) return grid.getCount(x,y,z)
             return grid.get27(x, y, z) - grid.get(x, y, z)
         }
@@ -57,6 +59,7 @@ enum class NeighborHood(val id: Int, val neighbors: Array<Vector3i>) {
         )
     ) {
         override fun count(grid: Grid, x: Int, y: Int, z: Int): Int {
+            if (grid is NibbleGridX64v2) return grid.getCount(x, y, z)
             // if(grid is GridV2) return grid.getCount(x,y,z)
             return grid.get3x(x, y, z) - grid.get(x, y, z, 0) +
                     grid.get(x, y - 1, z, 0) + grid.get(x, y + 1, z, 0) +
