@@ -8,12 +8,19 @@ import me.anno.engine.RemsEngine
 import me.anno.engine.WindowRenderFlags.enableVSync
 import me.anno.engine.WindowRenderFlags.showFPS
 import me.anno.engine.ui.EditorState
+import me.anno.engine.ui.control.DraggingControls
 import me.anno.engine.ui.render.PlayMode
 import me.anno.engine.ui.render.RenderView1
 import me.anno.engine.ui.render.SceneView
 import me.anno.extensions.mods.Mod
+import me.anno.fonts.Font
 import me.anno.io.saveable.Saveable.Companion.registerCustomClass
+import me.anno.language.translation.NameDesc
 import me.anno.ui.Panel
+import me.anno.ui.base.buttons.TextButton
+import me.anno.ui.base.groups.PanelListY
+import me.anno.ui.base.scrolling.ScrollPanelY
+import me.anno.ui.base.text.TextPanel
 import me.anno.ui.custom.CustomList
 import me.anno.ui.debug.TestEngine.Companion.testUI
 import me.anno.ui.editor.PropertyInspector
@@ -57,12 +64,35 @@ class CellMod : Mod() {
             val list = CustomList(false, style)
             val view = SceneView(RenderView1(PlayMode.PLAYING, world, style), style)
             view.playControls = view.editControls
+
+            val controls = view.editControls as DraggingControls
+            controls.rotationTargetDegrees.set(-20f, 30f, 0f)
+            controls.zoom(10f)
+
             val properties = PropertyInspector({ logic }, style, Unit)
             PrefabInspector.currentInspector = PrefabInspector(world.ref)
-            view.weight = 2f
-            properties.weight = 1f
-            list.add(properties)
-            list.add(view)
+            list.add(view, 3f)
+            list.add(properties, 1f)
+
+            // todo create custom UI with only the properties that we want to show
+
+            val properties2 = PanelListY(style)
+            properties2.add(TextPanel("Cellular Automata", style).apply {
+                font = Font(font.name, font.size * 1.25f, isBold = true, isItalic = false)
+            })
+
+            // add all debug-actions
+            val reflections = logic.getReflections()
+            for (action in reflections.debugActions) {
+                if (action.method.declaringClass != logic.javaClass) continue
+                properties2.add(
+                    TextButton(NameDesc(action.title), style)
+                        .addLeftClickListener {
+                            action.method.invoke(logic)
+                        })
+            }
+
+            list.add(ScrollPanelY(properties2, style), 1f)
             return list
         }
 

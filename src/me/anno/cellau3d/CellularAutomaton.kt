@@ -1,14 +1,11 @@
 package me.anno.cellau3d
 
-import me.anno.Build
 import me.anno.Time
 import me.anno.cellau3d.CellularStepShader.gpuStep
 import me.anno.cellau3d.Utils.parseFlags
-import me.anno.cellau3d.Utils.synchronizeGraphics
 import me.anno.cellau3d.grid.Grid
 import me.anno.cellau3d.grid.GridType
 import me.anno.cellau3d.grid.NibbleGridX64v2
-import me.anno.ecs.Transform
 import me.anno.ecs.annotations.*
 import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
@@ -16,7 +13,6 @@ import me.anno.ecs.components.mesh.material.Texture3DBTMaterial
 import me.anno.ecs.prefab.PrefabSaveable
 import me.anno.ecs.systems.OnUpdate
 import me.anno.engine.serialization.NotSerializedProperty
-import me.anno.engine.serialization.SerializedProperty
 import me.anno.gpu.GFX
 import me.anno.gpu.GPUTasks.addGPUTask
 import me.anno.gpu.framebuffer.DepthBufferType
@@ -26,10 +22,10 @@ import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
 import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
+import me.anno.utils.OS
 import me.anno.utils.assertions.assertEquals
 import me.anno.utils.hpc.ProcessingGroup
 import me.anno.utils.pooling.Pools.byteBufferPool
-import me.anno.utils.structures.lists.PairArrayList
 import me.anno.utils.types.Arrays.resize
 import org.apache.logging.log4j.LogManager
 import java.nio.ByteBuffer
@@ -303,24 +299,68 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
     @DebugAction
     fun step() {
         updatePeriod = Double.POSITIVE_INFINITY
-        if (!isComputing) {
-            val g0 = g0 ?: return
-            val g1 = g1 ?: return
-            if (gpuCompute) {
-                if (!isCreated1()) {
-                    updateTexture(g0)
-                }
-                gpuStep(this)
-                updateTexture(g0)
-            } else {
-                step(g0, g1)
+        stepImpl()
+    }
+
+    private fun stepImpl() {
+        if (isComputing) return
+        isComputing = true
+        val g0 = g0 ?: return
+        val g1 = g1 ?: return
+
+        if (updatePeriod.isFinite()) {
+            accumulatedTime = clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
+        }
+
+        if (gpuCompute) {
+            if (!isCreated1()) {
+                createTexture(g0)
             }
+            gpuStep(this)
+            updateTexture(g0)
+            isComputing = false
+        } else {
+            if (!OS.isWeb && asyncCompute) pool += { stepCpuImpl(g0, g1) }
+            else stepCpuImpl(g0, g1)
         }
     }
 
+    @DebugAction("Steps: 1/s")
+    @Order(1)
+    fun autoSteps1() {
+        updatePeriod = 1.0
+        accumulatedTime = 0.0
+    }
+
+    @DebugAction("Steps: 2/s")
+    @Order(2)
+    fun autoSteps05() {
+        updatePeriod = 0.5
+        accumulatedTime = 0.0
+    }
+
+    @DebugAction("Steps: 5/s")
+    @Order(3)
+    fun autoSteps025() {
+        updatePeriod = 0.25
+        accumulatedTime = 0.0
+    }
+
+    @DebugAction("Steps: 10/s")
+    @Order(4)
+    fun autoSteps01() {
+        updatePeriod = 0.1
+        accumulatedTime = 0.0
+    }
+
+    @DebugAction("Steps: Max/s")
+    @Order(5)
+    fun autoSteps0() {
+        updatePeriod = 0.0
+        accumulatedTime = 0.0
+    }
+
     override fun onUpdate() {
-        var g0 = g0
-        var g1 = g1
         if (stateBits < 1) {
             LOGGER.warn("Missing states")
             return
@@ -328,76 +368,21 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
         if (g0 == null || g1 == null) {
             LOGGER.info("Creating field")
             createGrid()
-            g0 = this.g0!!
-            g1 = this.g1!!
             init1()
         }
         accumulatedTime += Time.deltaTime
-        if (isAlive && accumulatedTime > updatePeriod && !isComputing) {
-            isComputing = true
-            when {
-                gpuCompute -> {
-                    if (!isCreated1()) {
-                        createTexture(g0)
-                    }
-                    // synchronization is needed for reliable time measurements
-                    // because OpenGL is an async API
-                    if (synchronizeGPU) synchronizeGraphics()
-                    val t0 = startTimer()
-                    gpuStep(this)
-                    if (synchronizeGPU) {
-                        synchronizeGraphics()
-                        stopTimer(g0, t0)
-                    } else invalidateTimer()
-                    updateTexture(g0)
-                    isComputing = false
-                }
-
-                asyncCompute -> {
-                    pool += {
-                        step(g0, g1)
-                    }
-                }
-
-                else -> step(g0, g1)
-            }
+        if (isAlive && accumulatedTime > updatePeriod) {
+            stepImpl()
         }
     }
 
-    @Docs("Delivers accurate time measurements, but slows down the whole engine")
-    @SerializedProperty
-    var synchronizeGPU = Build.isDebug
-
-    private val chunkMeshes = PairArrayList<Mesh, Transform>()
-
-    private fun startTimer(): Long {
-        val t0 = System.nanoTime()
-        if (updatePeriod.isFinite()) {
-            accumulatedTime = clamp(accumulatedTime - updatePeriod, -updatePeriod, updatePeriod)
-        }
-        return t0
-    }
-
-    private fun stopTimer(g0: Grid, t0: Long) {
-        val t1 = System.nanoTime()
-        nanosPerCell = (t1 - t0).toFloat() / g0.size
-        ticksPerSecond = 1e9f / (t1 - t0)
-    }
-
-    private fun invalidateTimer() {
-        nanosPerCell = Float.NaN
-        ticksPerSecond = Float.NaN
-    }
-
-    private fun step(g0: Grid, g1: Grid) {
-        val t0 = startTimer()
+    private fun stepCpuImpl(g0: Grid, g1: Grid) {
         val src = if (g0 == lastSrc) g1 else g0
         val dst = if (src === g0) g1 else g0
         computeMode.compute(pool, src, dst, rules)
         isAlive = !dst.isEmpty()
         lastSrc = src
         isComputing = false
-        stopTimer(g0, t0)
         // generate image for texture
         val data = packData(dst)
         if (GFX.isGFXThread()) {
@@ -444,7 +429,7 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
 
     private fun createTexture(grid: Grid, data: ByteBuffer) {
         updateTexture(grid)
-        if(!gpuCompute || !isCreated1()) {
+        if (!gpuCompute || !isCreated1()) {
             texture0.createMonochrome(data)
             if (gpuCompute) texture1.createMonochrome(data)
         }
@@ -507,9 +492,8 @@ class CellularAutomaton : ProceduralMesh(), OnUpdate {
 
     override fun destroy() {
         super.destroy()
-        chunkMeshes.forEach { it.first.destroy() }
-        chunkMeshes.clear()
         texture0.destroy()
+        texture1.destroy()
     }
 
     override val className = "CellularAutomaton2"
