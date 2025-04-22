@@ -3,6 +3,8 @@ package me.anno.cellau3d
 import me.anno.gpu.GFX
 import me.anno.gpu.shader.ComputeShader
 import me.anno.gpu.shader.ComputeTextureMode
+import me.anno.gpu.shader.GLSLType
+import me.anno.gpu.shader.builder.Variable
 import org.joml.Vector3i
 import kotlin.math.max
 
@@ -12,12 +14,14 @@ val shaders = NeighborHood.entries
     .associateWith { neighborHood ->
         val neighbors = neighborHood.neighbors
         ComputeShader(
-            "cells", Vector3i(8), "" +
+            "cells", Vector3i(8), listOf(
+                Variable(GLSLType.V1I, "birthMask"),
+                Variable(GLSLType.V1I, "survivalMask"),
+                Variable(GLSLType.V1I, "maxState"),
+                Variable(GLSLType.V3I, "size"),
+            ), "" +
                     "layout(r8, binding = 0) uniform image3D src;\n" +
                     "layout(r8, binding = 1) uniform image3D dst;\n" +
-                    "uniform int birthMask, survivalMask;\n" +
-                    "uniform int maxState;\n" +
-                    "uniform ivec3 size;\n" +
                     "int getValueAt(ivec3 pos){\n" +
                     "   if(all(greaterThanEqual(pos,ivec3(0))) && all(lessThan(pos,size))){\n" +
                     "       return int(imageLoad(src, pos).x * 255.0);\n" +

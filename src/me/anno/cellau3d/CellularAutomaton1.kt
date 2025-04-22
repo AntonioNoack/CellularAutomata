@@ -12,6 +12,7 @@ import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.MeshSpawner
 import me.anno.ecs.components.mesh.material.Material
 import me.anno.ecs.prefab.PrefabSaveable
+import me.anno.ecs.systems.OnUpdate
 import me.anno.engine.serialization.NotSerializedProperty
 import me.anno.maths.Maths
 import me.anno.maths.Maths.ceilDiv
@@ -35,7 +36,7 @@ import kotlin.math.log2
  * displays the grid with instanced rendered cubes
  * */
 @Suppress("unused")
-class CellularAutomaton1 : MeshSpawner() {
+class CellularAutomaton1 : MeshSpawner(), OnUpdate {
 
     @NotSerializedProperty
     var g0: Grid? = null
@@ -218,12 +219,12 @@ class CellularAutomaton1 : MeshSpawner() {
 
     var asyncCompute = true
 
-    override fun onUpdate(): Int {
+    override fun onUpdate() {
         var g0 = g0
         var g1 = g1
         if (stateBits < 1) {
             LOGGER.warn("Missing states")
-            return 1
+            return
         }
         if (g0 == null || g1 == null) {
             LOGGER.info("Creating field")
@@ -243,7 +244,6 @@ class CellularAutomaton1 : MeshSpawner() {
                 step(g0, g1)
             }
         }
-        return 1 // if (isAlive) 1 else 16 // returning 16 causes issues, why?
     }
 
     // nice try ^^, but our chunk generation and mesh upload is much too slow
@@ -331,15 +331,15 @@ class CellularAutomaton1 : MeshSpawner() {
         }
         for (i in chunkMeshes.size - 1 downTo index) {
             chunkMeshes.getFirst(i).destroy()
-            chunkMeshes.removeAt(i * 2)
+            chunkMeshes.removeAt(i * 2, keepOrder = true)
         }
     }
 
-    override fun forEachMesh(run: (IMesh, Material?, Transform) -> Unit) {
+    override fun forEachMesh(callback: (IMesh, Material?, Transform) -> Boolean) {
         if (generateChunks) {
             try {
                 for (i in 0 until chunkMeshes.size) {
-                    run(chunkMeshes.getFirst(i), null, chunkMeshes.getSecond(i))
+                    callback(chunkMeshes.getFirst(i), null, chunkMeshes.getSecond(i))
                 }
             } catch (e: NullPointerException) {
                 // we don't care
@@ -362,7 +362,7 @@ class CellularAutomaton1 : MeshSpawner() {
                     transform.teleportUpdate()
                     transform.validate()
                     val matIndex = (src.getState(x, y, z) - 1) * (materials.size - 1) / max(1, states - 2)
-                    run(mesh, materials[matIndex], transform)
+                    callback(mesh, materials[matIndex], transform)
                 }
             }
         }

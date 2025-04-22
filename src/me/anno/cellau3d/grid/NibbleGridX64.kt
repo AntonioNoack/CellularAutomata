@@ -100,5 +100,4 @@ open class NibbleGridX64(sx: Int, sy: Int, sz: Int, stateBits: Int) : Grid(sx, s
     override fun setState(x: Int, y: Int, z: Int, state: Int) {
         states[getIndex(x, y, z)] = state
     }
-
 }

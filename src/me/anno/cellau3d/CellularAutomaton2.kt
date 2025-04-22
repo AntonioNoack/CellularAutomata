@@ -14,16 +14,18 @@ import me.anno.ecs.components.mesh.Mesh
 import me.anno.ecs.components.mesh.ProceduralMesh
 import me.anno.ecs.components.mesh.material.Texture3DBTMaterial
 import me.anno.ecs.prefab.PrefabSaveable
+import me.anno.ecs.systems.OnUpdate
 import me.anno.engine.serialization.NotSerializedProperty
 import me.anno.engine.serialization.SerializedProperty
 import me.anno.gpu.GFX
+import me.anno.gpu.GPUTasks.addGPUTask
 import me.anno.gpu.texture.Filtering
-import me.anno.gpu.texture.Texture2D
 import me.anno.gpu.texture.Texture3D
 import me.anno.maths.Maths.clamp
 import me.anno.mesh.Shapes
 import me.anno.ui.editor.PropertyInspector
 import me.anno.utils.Color.toVecRGB
+import me.anno.utils.pooling.Pools.byteBufferPool
 import me.anno.utils.structures.lists.PairArrayList
 import me.anno.utils.types.Arrays.resize
 import org.apache.logging.log4j.LogManager
@@ -39,7 +41,7 @@ import kotlin.math.sign
  * displays the grid with a raytracing fragment shader
  * */
 @Suppress("unused")
-class CellularAutomaton2 : ProceduralMesh() {
+class CellularAutomaton2 : ProceduralMesh(), OnUpdate {
 
     @NotSerializedProperty
     var texture0 = Texture3D("cells", 1, 1, 1)
@@ -179,10 +181,8 @@ class CellularAutomaton2 : ProceduralMesh() {
         sizeY = sizeX
         sizeZ = sizeX
         val prefabPath = prefabPath
-        if (prefabPath != null) {
-            root.prefab?.set(prefabPath, "sizeY", sizeY)
-            root.prefab?.set(prefabPath, "sizeZ", sizeZ)
-        }
+        root.prefab?.set(prefabPath, "sizeY", sizeY)
+        root.prefab?.set(prefabPath, "sizeZ", sizeZ)
         invalidateMesh()
         PropertyInspector.invalidateUI(true)
     }
@@ -291,12 +291,12 @@ class CellularAutomaton2 : ProceduralMesh() {
         }
     }
 
-    override fun onUpdate(): Int {
+    override fun onUpdate() {
         var g0 = g0
         var g1 = g1
         if (stateBits < 1) {
             LOGGER.warn("Missing states")
-            return 1
+            return
         }
         if (g0 == null || g1 == null) {
             LOGGER.info("Creating field")
@@ -335,7 +335,6 @@ class CellularAutomaton2 : ProceduralMesh() {
                 else -> step(g0, g1)
             }
         }
-        return 1 // if (isAlive) 1 else 16 // returning 16 causes issues, why?
     }
 
     @Docs("Delivers accurate time measurements, but slows down the whole engine")
@@ -377,14 +376,14 @@ class CellularAutomaton2 : ProceduralMesh() {
         if (GFX.isGFXThread()) {
             createTexture(dst, data)
         } else {
-            GFX.addGPUTask("CA::createTexture", 1) {
+            addGPUTask("CA::createTexture", 1) {
                 createTexture(dst, data)
             }
         }
     }
 
     private fun packData(dst: Grid): ByteBuffer {
-        val data = Texture2D.bufferPool[sizeX * sizeY * sizeZ, false, false]
+        val data = byteBufferPool[sizeX * sizeY * sizeZ, false, false]
         for (z in 0 until dst.sz) {
             for (y in 0 until dst.sy) {
                 for (x in 0 until dst.sx) {
@@ -419,7 +418,7 @@ class CellularAutomaton2 : ProceduralMesh() {
         updateTexture(grid)
         texture0.createMonochrome(data)
         if (gpuCompute) texture1.createMonochrome(data)
-        Texture2D.bufferPool.returnBuffer(data)
+        byteBufferPool.returnBuffer(data)
     }
 
     private fun createTexture(grid: Grid) {
@@ -437,9 +436,9 @@ class CellularAutomaton2 : ProceduralMesh() {
         val base0 = Shapes.flatCube.back
         val base = base0.positions!!
         val positions = mesh.positions.resize(base.size)
-        val sx = max(sizeX.toFloat() / 2f, 0.5f)
-        val sy = max(sizeY.toFloat() / 2f, 0.5f)
-        val sz = max(sizeZ.toFloat() / 2f, 0.5f)
+        val sx = max(sizeX, 1).toFloat() * 0.5f
+        val sy = max(sizeY, 1).toFloat() * 0.5f
+        val sz = max(sizeZ, 1).toFloat() * 0.5f
         for (i in positions.indices step 3) {
             // use the sign to preserve the original shape,
             // since this function might run recursively on the original data

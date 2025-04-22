@@ -1,18 +1,18 @@
 package me.anno.cellau3d
 
-import me.anno.config.DefaultConfig
 import me.anno.config.DefaultConfig.style
 import me.anno.ecs.Entity
-import me.anno.ecs.components.mesh.material.Material
 import me.anno.ecs.prefab.PrefabInspector
-import me.anno.engine.ECSRegistry
+import me.anno.ecs.systems.Systems
 import me.anno.engine.RemsEngine
+import me.anno.engine.WindowRenderFlags.enableVSync
+import me.anno.engine.WindowRenderFlags.showFPS
 import me.anno.engine.ui.EditorState
 import me.anno.engine.ui.render.PlayMode
+import me.anno.engine.ui.render.RenderView1
 import me.anno.engine.ui.render.SceneView
-import me.anno.extensions.ExtensionLoader
 import me.anno.extensions.mods.Mod
-import me.anno.io.Saveable.Companion.registerCustomClass
+import me.anno.io.saveable.Saveable.Companion.registerCustomClass
 import me.anno.ui.Panel
 import me.anno.ui.custom.CustomList
 import me.anno.ui.debug.TestEngine.Companion.testUI
@@ -31,34 +31,36 @@ class CellMod : Mod() {
 
         @JvmStatic
         fun main(args: Array<String>) {
-            ExtensionLoader.loadMainInfo()
             // runEngine() // alternative
             testUI("Cellular Automata", Companion::createGame)
         }
 
         @JvmStatic
         fun createGame(): Panel {
-            registerCustomClass(Material())
-            registerCustomClass(CellularAutomaton2())
-            DefaultConfig["debug.ui.showFPS"] = false
-            ECSRegistry.init()
-            val ca = CellularAutomaton2()
-            ca.sizeX = 100
-            ca.sizeY = 100
-            ca.sizeZ = 100
-            ca.births = "1"
-            ca.survives = ""
-            ca.states = 5
-            ca.neighborHood = NeighborHood.VON_NEUMANN
-            ca.updatePeriod = 0.1f
-            val world = Entity()
-            world.add(ca)
-            val component = world.components.first()
+
+            // todo bug: GPU mode is broken
+
+            showFPS = false
+            enableVSync = true
+
+            val logic = CellularAutomaton2().apply {
+                sizeX = 100
+                sizeY = 100
+                sizeZ = 100
+                births = "1"
+                survives = ""
+                states = 5
+                neighborHood = NeighborHood.VON_NEUMANN
+                updatePeriod = 0.1f
+            }
+
+            val world = Entity().add(logic)
             EditorState.prefabSource = world.ref
-            EditorState.select(component)
+            Systems.world = world
             val list = CustomList(false, style)
-            val view = SceneView(PlayMode.EDITING, style)
-            val properties = PropertyInspector({ EditorState.selection }, style)
+            val view = SceneView(RenderView1(PlayMode.PLAYING, world, style), style)
+            view.playControls = view.editControls
+            val properties = PropertyInspector({ logic }, style, Unit)
             PrefabInspector.currentInspector = PrefabInspector(world.ref)
             view.weight = 2f
             properties.weight = 1f

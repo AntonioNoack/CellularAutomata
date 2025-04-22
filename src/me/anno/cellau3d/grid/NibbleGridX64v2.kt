@@ -38,5 +38,4 @@ open class NibbleGridX64v2(
             isSet[index] = v
         }
     }
-
 }

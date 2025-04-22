@@ -44,8 +44,7 @@ enum class GridType(val id: Int) {
         override fun create(ca: CellularAutomaton2): Grid {
             return NibbleGridX64v2(ca.sizeX, ca.sizeY, ca.sizeZ, ca.stateBits, ca.neighborHood)
         }
-    }
-    ;
+    };
 
     abstract fun create(ca: CellularAutomaton1): Grid
     abstract fun create(ca: CellularAutomaton2): Grid

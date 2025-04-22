@@ -5,7 +5,6 @@ import java.util.*
 
 abstract class Grid(val sx: Int, val sy: Int, val sz: Int, val stateBits: Int) {
 
-    val maxStates = 1 shl stateBits
     val size = sx * sy * sz
 
     // 0 - 27 -> not worth to cache it
@@ -73,8 +72,5 @@ abstract class Grid(val sx: Int, val sy: Int, val sz: Int, val stateBits: Int) {
                 setState(x, y, z, state)
             }
         }
-
     }
-
-
 }
